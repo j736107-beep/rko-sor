@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). Autor: Wujek Fido. */
 (function(root){
 'use strict';
-const VERSION='1.2';
+const VERSION='1.3';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -39,7 +39,7 @@ function norm(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[\
 const UN={zero:0,jeden:1,jedna:1,jedno:1,dwa:2,dwie:2,trzy:3,cztery:4,piec:5,szesc:6,siedem:7,osiem:8,dziewiec:9,dziesiec:10,jedenascie:11,dwanascie:12,trzynascie:13,czternascie:14,pietnascie:15,szesnascie:16,siedemnascie:17,osiemnascie:18,dziewietnascie:19};
 const TENS={dwadziescia:20,trzydziesci:30,czterdziesci:40,piecdziesiat:50,szescdziesiat:60,siedemdziesiat:70,osiemdziesiat:80,dziewiecdziesiat:90};
 const HUND={sto:100,dwiescie:200,trzysta:300};
-function parseNumber(text){const t=norm(text);const m=t.match(/\d+(?:[ ,.]\d+)?/);if(m)return parseFloat(m[0].replace(/[ ,]/,'.'));
+function parseNumber(text){const t=norm(text);{const pm=t.split(/ (?:przecinek|kropka) /);if(pm.length===2&&!/\d/.test(t)){const a=parseNumber(pm[0]),b=parseNumber(pm[1]);if(a!=null&&b!=null&&b<10)return a+b/10}}const m=t.match(/\d+(?:[ ,.]\d+)?/);if(m)return parseFloat(m[0].replace(/[ ,]/,'.'));
  let tot=0,any=false,half=false;for(const w of t.split(' ')){if(w in HUND){tot+=HUND[w];any=true}else if(w in TENS){tot+=TENS[w];any=true}else if(w in UN){tot+=UN[w];any=true}else if(w==='pol')half=true}
  return any?tot+(half?.5:0):null}
 // kolejność ma znaczenie: dłuższe frazy pierwsze
@@ -117,7 +117,7 @@ const SAY={
  bicarbQ:'Wodorowęglan nie rutynowo. Czy jest wskazanie: zatrucie trójcyklicznymi, hiperkaliemia z arytmią, kwasica hipochloremiczna lub długie zatrzymanie z potwierdzoną kwasicą?',
  bicarb:'Podaj wodorowęglan sodu 50 milimoli, czyli 50 mililitrów 8,4-procentowego. Powiedz: podano.',
  bicarbNo:'Nie podawaj wodorowęglanu.',
- lysis:'Tromboliza. Alteplaza 50 miligramów bolus, czyli 50 mililitrów. Potem heparyna 5000 jednostek, czyli 1 mililitr. Kontynuuj resuscytację 60 do 90 minut. Powiedz: podano.',
+ lysis:'Tromboliza. Alteplaza 50 miligramów bolus, czyli 50 mililitrów. Kontynuuj resuscytację 60 do 90 minut. Powiedz: podano.',
  decision:'Dwadzieścia minut resuscytacji. Rozważ: CO2 w wydychanym powietrzu, przyczynę odwracalną, hipotermię i możliwość ECPR. Decyzja należy do lekarza. Prowadzę dalej.',
  endQ:'Zakończyć resuscytację? Powiedz: tak, zakończ.',
  adrinfArrest:'W trakcie zatrzymania krążenia adrenalina tylko w bolusie, 1 miligram.',
@@ -129,7 +129,7 @@ const SAY={
  downPump:'Zmniejszam. Ustaw pompę',
  noraLow:'Noradrenalina na dawce minimalnej. Rozważ wyłączenie pompy.',
  dobuMax:'Maksymalna dawka dobutaminy. Wezwij anestezjologa.',
- hepQ:'Wlew heparyny: zatorowość płucna czy ostry zespół wieńcowy?',
+ hepQ:'Heparyna: zatorowość płucna czy ostry zespół wieńcowy?',hepNoInf:'Wlew heparyny dopiero po powrocie krążenia.',aptt:'Kontrola APTT za 6 godzin.',hepRosc:'Zatorowość płucna: rozpocząć wlew heparyny? Tak albo nie.',
  stacked:'Monitorowane zatrzymanie: rozważ do 3 wyładowań seryjnych, potem uciskanie.',
  endCancel:'Nie zakończono. Prowadzę dalej.',
  ended:'Zakończono. Raport jest gotowy.',
@@ -170,6 +170,7 @@ const SAY={
  pacingOffer:'Jeśli leki nie działają, powiedz: potrzebny stymulator.',
  sent:'Raport wysłany do programu poczty.',queued:'Raport zapisany, wyślę po powrocie sygnału.',noMail:'Brak adresu e-mail w ustawieniach. Raport zapisany w kolejce.',
  notUnd:'Nie zrozumiałam.',remind:'Przypominam.',paused:'Pauza. Zegar biegnie. Powiedz: dalej.',resumed:'Wznawiam.',
+ acQ:'Czy pacjent przyjmuje leki przeciwkrzepliwe?',acDrug:'Który lek: dabigatran, rywaroksaban, apiksaban, warfaryna czy heparyna?',acDoac:'Przy lekach z grupy DOAC nie podawaj heparyny.',inrQ:'Podaj INR.',inrHigh:'INR powyżej 2,5. Nie podawaj heparyny.',inrUnknown:'Najpierw oznacz INR. Wstrzymaj heparynę.',hepLast:'Kiedy była ostatnia dawka heparyny?',hepRecent:'Ostatnia dawka mniej niż 12 godzin temu. Nie podawaj bolusu, skonsultuj dawkowanie.',hepLastUnknown:'Ustal czas ostatniej dawki. Wstrzymaj heparynę.',acUnknown:'Ustal leki przed podaniem heparyny.',hepStopped:'Heparyna wstrzymana – patrz wcześniejszy komunikat.',
  lucasOff:'LUCAS wstrzymany. Ocena rytmu. Jeśli POCUS, w trakcie oceny rytmu, maksymalnie 10 sekund.',gas:'Pobierz gazometrię, potas.',lucas5:'Pięć sekund.',lucas10:'Dziesięć sekund, wznów LUCAS.',lucasOn:'LUCAS pracuje.',
  logged:'Zapisano:',nothing:'Nie mam nic do powtórzenia.',
  dobuNo:'Bez dobutaminy.',bicarbAsk:'',
@@ -189,7 +190,7 @@ function htQ(i){return 'Przyczyna '+(i+1)+' z '+HT.length+': '+HT[i][0]+'. Czy t
 // ---------- silnik ----------
 const MS=1000,CYCLE=120*MS,REM=10*MS,ADRI=4*60*MS,MAPI=5*60*MS;
 function Engine(opt){opt=opt||{};const E=this;E.now=opt.now||(()=>Date.now());E.out=opt.out||(()=>{});E.alarm=opt.alarm||(()=>{});E.persist=opt.persist||(()=>{});E.rand=opt.rand||Math.random;
- E.energy=opt.energy||'mindray';E.paceEl=opt.paceEl||'ap';E.paceMax=opt.paceMax||200;E.fentConc=opt.fentConc||50;E.midaConc=opt.midaConc||1;E.midaAmpMg=opt.midaAmpMg||5;E.midaAmpMl=opt.midaAmpMl||1;E.atroAmp=opt.atroAmp||0.5;E.atroDose=opt.atroDose||0.5;E.stacked=!!opt.stacked;E.mapHigh=opt.mapHigh||90;E.hep=Object.assign({u:25000,ml:50},opt.hep||{});E.amioInf=Object.assign({mg:900,ml:50},opt.amioInf||{});E.conc=opt.conc||{};E.sayConc=opt.sayConc!==false;E.s={mode:'idle'};}
+ E.energy=opt.energy||'mindray';E.paceEl=opt.paceEl||'ap';E.paceMax=opt.paceMax||200;E.fentConc=opt.fentConc||50;E.midaConc=opt.midaConc||1;E.midaAmpMg=opt.midaAmpMg||5;E.midaAmpMl=opt.midaAmpMl||1;E.atroAmp=opt.atroAmp||0.5;E.atroDose=opt.atroDose||0.5;E.stacked=!!opt.stacked;E.mapHigh=opt.mapHigh||90;E.hep=Object.assign({u:25000,ml:50},opt.hep||{});E.hepAmp=opt.hepAmp||5000;E.amioInf=Object.assign({mg:900,ml:50},opt.amioInf||{});E.conc=opt.conc||{};E.sayConc=opt.sayConc!==false;E.s={mode:'idle'};}
 const P=Engine.prototype;
 P.say=function(t,kind){this.s.last=t;this.out(t,kind||'say')};
 P.log=function(type,txt,extra){const s=this.s;const e=Object.assign({t:this.now(),type,txt},extra||{});s.log.push(e);this.persist(s);return e};
@@ -289,7 +290,7 @@ P.answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd
  case 'calcium':if(yes){this.log('lek','Chlorek wapnia 10% 10 ml (1 g)',{drug:'wapń',dose:'1 g'});this.say(SAY.logged+' wapń.','ack')}else return false;break;
  case 'tca':case 'bicarbQ':if(yes)this.ask('bicarb',SAY.bicarb);else if(no||def){this.say(SAY.bicarbNo);this.log('lek','Wodorowęglan – brak wskazania')}else return false;break;
  case 'bicarb':if(yes){this.log('lek','Wodorowęglan sodu 8,4% 50 ml (50 mmol)',{drug:'wodorowęglan',dose:'50 mmol'});this.say(SAY.logged+' wodorowęglan.','ack')}else return false;break;
- case 'lysis':if(yes){s.lysisT=this.now();this.log('lek','Alteplaza 50 mg bolus + heparyna 5000 j.m.',{drug:'trombolityk+heparyna',dose:'50 mg / 5000 j.m.'});this.say(SAY.logged+' tromboliza. Kontynuuj 60 do 90 minut.','ack')}else return false;break;
+ case 'lysis':if(yes){s.lysisT=this.now();this.log('lek','Alteplaza 50 mg bolus',{drug:'trombolityk',dose:'50 mg'});this.say(SAY.logged+' tromboliza. Kontynuuj 60 do 90 minut.','ack');this.startInf('hep','pe')}else return false;break;
  case 'endQ':s.endAsk=false;if(c==='zakoncz_tak'||c==='yes'){this.finish();return true}this.say(SAY.endCancel);break;
  // ---- po ROSC ----
  case 'sys':{const pr=parsePair(r.text);if(pr&&pr[0]>=30&&pr[0]<=300&&pr[1]>=10&&pr[1]<=200){s.sysV=pr[0];this.onMap(mapOf(pr[0],pr[1]),pr[0],pr[1]);break}}if(r.num!=null&&r.num>=30&&r.num<=300){s.sysV=r.num;this.ask('dia',SAY.dia,{prio:1})}else{if(def)return true;this.ask('sys',SAY.sysAgain,{prio:1});return true}break;
@@ -310,6 +311,14 @@ P.answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd
  case 'bradyDrug':{const d=['iso','dopa','adrinf'].includes(c)?c:/adrenalin/.test(norm(r.text))?'adrinf':(def?'iso':null);if(!d)return false;this.startBinf(d);break}
  case 'which':{const t=norm(r.text);const k=/noradrenalin/.test(t)?'nora':/dobutamin/.test(t)?'dobu':/izopren|dopamin|adrenalin|bradykard|wlew/.test(t)?'binf':null;if(!k||!this.titratable().includes(k))return false;this.titrate(k,q.data);break}
  case 'hepQ':{const t=norm(r.text);const ind=/zator|pe\b|plucn/.test(t)?'pe':/wiencow|zawal|acs|ozw/.test(t)?'acs':null;if(!ind)return false;this.startInf('hep',ind);break}
+ case 'hepRoscQ':if(yes){this.startInf('hep',s.hepAfterRosc||'pe')}else if(no||def){s.hepAfterRosc=null;this.log('lek','Wlew heparyny po ROSC – nie rozpoczęto')}else return false;break;
+ case 'acQ':if(no){this.hepGateEnd('ok','Leki przeciwkrzepliwe: nie')}else if(yes){this.log('heparyna – bezpieczeństwo','Leki przeciwkrzepliwe: tak');this.ask('acDrug',SAY.acDrug,{prio:2})}else if(c==='unknown'){this.hepGateEnd('stop','Leki przeciwkrzepliwe: nieznane – heparyna wstrzymana',SAY.acUnknown)}else return false;break;
+ case 'acDrug':{const t=norm(r.text);if(/dabigatran|rywaroksaban|rivaroksaban|riwaroksaban|apiksaban|apixaban|pradax|xarelt|eliqu|elikw|doac|noac|edoksaban|lixian/.test(t)){this.hepGateEnd('stop','Lek: DOAC ('+r.text+') – heparyna przeciwwskazana',SAY.acDoac)}
+  else if(/warfaryn|warfin|acenokumarol|sintrom|syntrom/.test(t)){this.log('heparyna – bezpieczeństwo','Lek: antagonista witaminy K ('+r.text+')');this.ask('inrQ',SAY.inrQ,{prio:2})}
+  else if(/heparyn|enoksaparyn|clexan|kleksan|fraksyparyn/.test(t)){this.log('heparyna – bezpieczeństwo','Lek: heparyna ('+r.text+')');this.ask('hepLast',SAY.hepLast,{prio:2})}else return false;break}
+ case 'inrQ':if(r.num!=null&&r.num>0&&r.num<15){if(r.num>2.5)this.hepGateEnd('stop','INR '+fmt1(r.num)+' (>2,5) – heparyna przeciwwskazana',SAY.inrHigh);else this.hepGateEnd('ok','INR '+fmt1(r.num)+' (≤2,5) – heparyna dozwolona')}else if(c==='unknown'||no){this.hepGateEnd('stop','INR nieznany – heparyna wstrzymana do oznaczenia',SAY.inrUnknown)}else return false;break;
+ case 'hepLast':{const t=norm(r.text);if(/wlew|pomp|trwa|teraz|w trakcie/.test(t)||(r.num!=null&&r.num<12)||/godzin[ea]? temu/.test(t)&&r.num==null){this.hepGateEnd('stop','Ostatnia dawka heparyny <12 h'+(r.num!=null?' ('+r.num+' h)':' / trwający wlew')+' – bez bolusu, konsultacja (próg 12 h – DO WERYFIKACJI)',SAY.hepRecent)}
+  else if(r.num!=null&&r.num>=12){this.hepGateEnd('ok','Ostatnia dawka heparyny '+r.num+' h temu (≥12 h; próg DO WERYFIKACJI)')}else if(c==='unknown'){this.hepGateEnd('stop','Czas ostatniej dawki heparyny nieznany – wstrzymano',SAY.hepLastUnknown)}else return false;break}
  case 'infGo':if(yes)this.log('lek',q.data+' – pompa uruchomiona');else if(!def)return false;break;
  case 'tube':if(r.num!=null&&r.num>=2&&r.num<=10){s.tube=r.num;this.log('drogi oddechowe','Rurka nr '+fmt1(r.num))}else if(!def)return false;break;
  case 'usgRes':if(def)break;if(!r.text)return false;s.usgRes=(s.usgRes?s.usgRes+'; ':'')+r.text;this.log('POCUS','Wynik: '+r.text);break;
@@ -338,11 +347,19 @@ P.dobuUp=function(){const s=this.s;if(s.dobu.dose>=20-1e-9){this.alarm('dobu');t
  if(s.dobu.dose>=20-1e-9){this.alarm('dobu');this.say(SAY.dobuMax,'alarm')}};
 P.noraDown=function(){const s=this.s;if(s.nora.dose<=.05+1e-9){this.say(SAY.noraLow);return}s.nora.dose=Math.round((s.nora.dose-.05)*100)/100;s.nora.mlh=noraMlh(s.nora.dose,s.kg,s.syr);
  this.log('lek','Noradrenalina ↓ '+fmt1(s.nora.mlh)+' ml/h = '+String(s.nora.dose).replace('.',',')+' µg/kg/min',{drug:'noradrenalina',dose:String(s.nora.dose).replace('.',',')+' µg/kg/min',mlh:s.nora.mlh});this.say(SAY.downPump+' '+flowPhrase(s.nora.mlh)+'.')};
-const HEPR={pe:18,acs:12};
-P.startInf=function(k,ind){const s=this.s;if(k==='hep'&&!s.kg){s.infPending=[k,ind];this.ask('weight',SAY.weight,{prio:2});return}s.infPending=null;s.infs=s.infs||{};
- if(k==='hep'){const conc=this.hep.u/this.hep.ml,rate=HEPR[ind]*s.kg,mlh=r1(rate/conc);s.infs.hep={ind,mlh,rate};
-  this.log('lek','Heparyna niefrakcjonowana '+this.hep.u+' j./'+this.hep.ml+' ml: '+fmt1(mlh)+' ml/h = '+HEPR[ind]+' j./kg/h ('+(ind==='pe'?'zatorowość płucna':'OZW')+') – DO WERYFIKACJI',{drug:'heparyna wlew',dose:HEPR[ind]+' j./kg/h',mlh});
-  this.say('Heparyna: '+this.hep.u+' jednostek dociągnij solą fizjologiczną do '+this.hep.ml+' mililitrów. '+SAY.setPump+' '+flowPhrase(mlh)+'.');this.ask('infGo','Powiedz: podano, gdy pompa ruszy.',{def:'skip',tries:2,prio:1,data:'Heparyna'})}
+const HEPR={pe:18,acs:12},HEPB={pe:80,acs:60},HEPBMAX={acs:5000},HEPRMAX={acs:1000};
+function fmt2(x){const v=Math.round(x*100)/100;return String(v).replace('.',',')}
+function hepCalc(ind,kg,ampU,u,ml){const bu=Math.min(HEPB[ind]*kg,HEPBMAX[ind]||Infinity),bml=Math.round(bu/ampU*100)/100,rate=Math.min(HEPR[ind]*kg,HEPRMAX[ind]||Infinity),mlh=r1(rate/(u/ml));return {bu,bml,rate,mlh}}
+function hepBolusText(bml){return 'Bolus heparyny: nabierz '+fmt2(bml)+' '+(Number.isInteger(bml)?mlWord(bml):'mililitra')+' z ampułki, podaj dożylnie.'}
+function hepPrepText(u,ml){return 'Przygotuj '+(u%1000===0?(u/1000)+' tysięcy':u)+' jednostek heparyny w '+ml+' mililitrach.'}
+P.hepGateEnd=function(res,txt,sayTxt){const s=this.s;s.hepGate=res;s.hepGateTxt=txt;this.log('heparyna – bezpieczeństwo',txt);if(sayTxt)this.say(sayTxt,'alarm');if(res==='ok'&&s.hepGatePend){const i=s.hepGatePend;s.hepGatePend=null;this.startInf('hep',i)}else if(res==='stop'){s.hepGatePend=null;s.hepAfterRosc=null}};
+P.startInf=function(k,ind){const s=this.s;if(k==='hep'&&s.hepGate!=='ok'){if(s.hepGate==='stop'){this.say(SAY.hepStopped);return}s.hepGatePend=ind;this.ask('acQ',SAY.acQ,{prio:2});return}if(k==='hep'&&!s.kg){s.infPending=[k,ind];this.ask('weight',SAY.weight,{prio:2});return}s.infPending=null;s.infs=s.infs||{};
+ if(k==='hep'){const now=this.now(),c=hepCalc(ind,s.kg,this.hepAmp,this.hep.u,this.hep.ml),lbl=ind==='pe'?'zatorowość płucna':'OZW';s.infs.hep=Object.assign({ind,bolusOnly:!!s.hepBolusOnly},c);
+  this.log('lek','Heparyna bolus '+c.bu+' j. ('+HEPB[ind]+' j./kg'+(HEPBMAX[ind]?', max '+HEPBMAX[ind]+' j.':'')+') = '+fmt2(c.bml)+' ml z ampułki '+this.hepAmp+' j./ml ('+lbl+')',{drug:'heparyna bolus',dose:c.bu+' j.'});
+  if(s.mode==='arrest'){s.hepAfterRosc=ind;this.log('lek','Wlew heparyny wstrzymany do ROSC (RKO)');this.say(hepBolusText(c.bml)+' '+SAY.hepNoInf);this.ask('infGo','Powiedz: podano.',{def:'skip',tries:2,prio:1,data:'Heparyna bolus'});return}
+  s.hepAfterRosc=null;s.infs.hep.aptt=now+6*3600*1000;
+  this.log('lek','Heparyna wlew '+this.hep.u+' j./'+this.hep.ml+' ml: '+fmt1(c.mlh)+' ml/h = '+c.rate+' j./h ('+HEPR[ind]+' j./kg/h'+(HEPRMAX[ind]?', max '+HEPRMAX[ind]+' j./h':'')+'); kontrola APTT o '+hhmm(now+6*3600*1000).slice(0,5),{drug:'heparyna wlew',dose:HEPR[ind]+' j./kg/h',mlh:c.mlh});
+  this.say(hepBolusText(c.bml)+' '+hepPrepText(this.hep.u,this.hep.ml)+' '+SAY.setPump+' '+flowPhrase(c.mlh)+'. '+SAY.aptt);this.ask('infGo','Powiedz: podano, gdy pompa ruszy.',{def:'skip',tries:2,prio:1,data:'Heparyna'})}
  else{const mlh=r1(this.amioInf.ml/24);s.infs.amio={mlh};this.log('lek','Amiodaron wlew '+this.amioInf.mg+' mg/'+this.amioInf.ml+' ml na 24 h: '+fmt1(mlh)+' ml/h – DO WERYFIKACJI',{drug:'amiodaron wlew',dose:this.amioInf.mg+' mg/24 h',mlh});
   this.say('Amiodaron: '+this.amioInf.mg+' miligramów dociągnij glukozą 5 procent do '+this.amioInf.ml+' mililitrów. '+SAY.setPump+' '+flowPhrase(mlh)+'.');this.ask('infGo','Powiedz: podano, gdy pompa ruszy.',{def:'skip',tries:2,prio:1,data:'Amiodaron'})}};
 P.setKg=function(kg){const s=this.s;s.kg=kg;s.kgAssumed=false;this.log('masa','Korekta masy ciała: '+kg+' kg');this.say(SAY.logged+' '+kg+' kilogramów.','ack');
@@ -382,7 +399,7 @@ P.input=function(alts){const s=this.s;const r=interpret(alts);s.heard=r.text;
  case 'replay':this.replay();return r.cmd;
  case 'pace':if(s.mode==='arrest'){s.cprPace=true;this.log('stymulacja','RKO ze stymulacją (asystolia z załamkami P / blok całkowity) – DO WERYFIKACJI');this.say(SAY.cprPace+', '+this.paceMax+' miliamperów. '+SAY.cprPace2);return r.cmd}this.startPacing();return r.cmd;
  case 'adrinf':if(s.mode==='arrest'){this.say(SAY.adrinfArrest);return r.cmd}if(!(s.cur&&s.cur.id==='bradyDrug')){this.ask('adrinfQ',SAY.adrinfQ,{prio:2,def:'no',tries:1});return r.cmd}break;
- case 'hepinf':if(s.mode!=='arrest'){this.ask('hepQ',SAY.hepQ,{prio:1});return r.cmd}break;
+ case 'hepinf':if(s.mode==='arrest'){this.say(SAY.hepNoInf);return r.cmd}{this.ask('hepQ',SAY.hepQ,{prio:1});return r.cmd}break;
  case 'amioinf':if(s.mode!=='arrest'){this.startInf('amio');return r.cmd}break;
  case 'kg':if(r.num!=null&&!(s.cur&&s.cur.id==='weight')&&r.num>=20&&r.num<=250){this.setKg(r.num);return r.cmd}break;
  case 'down':if(s.nora&&s.mode!=='arrest'){this.noraDown();return r.cmd}break;
@@ -412,7 +429,7 @@ P.input=function(alts){const s=this.s;const r=interpret(alts);s.heard=r.text;
  if(ok){if(s.cur===c)s.cur=null;this.pump()}else{c.at=this.now();this.say(SAY.notUnd+' '+c.text,'ask')}
  return r.cmd};
 P.replay=function(){const s=this.s;const t=s.cur?s.cur.text:s.last;if(t)this.out(t,'replay');else this.out(SAY.nothing,'replay')};
-P.toRosc=function(){const s=this.s,now=this.now();s.mode='rosc';s.rosc.push(now);s.q=s.q.filter(q=>['weight','syr','spo2','ekg','stemi','temp','glu','gcs','tube','usgRes'].includes(q.id));s.cur=null;
+P.toRosc=function(){const s=this.s,now=this.now();s.mode='rosc';s.rosc.push(now);s.q=s.q.filter(q=>['hepRoscQ','weight','syr','spo2','ekg','stemi','temp','glu','gcs','tube','usgRes'].includes(q.id));s.cur=null;if(s.hepAfterRosc)this.ask('hepRoscQ',SAY.hepRosc,{prio:1,def:'no',tries:2});
  this.log('ROSC','Powrót spontanicznego krążenia');this.say(SAY.rosc);this.ask('sys',SAY.sys,{prio:0});
  if(!s.post.spo2)this.ask('spo2',SAY.spo2,{def:'skip',tries:2});if(!s.post.ekg)this.ask('ekg',SAY.ekg,{def:'skip',tries:2});if(!s.post.temp)this.ask('temp',SAY.temp,{def:'skip',tries:2});if(s.post.glu==null)this.ask('glu',SAY.glu,{def:'skip',tries:2});if(s.post.gcs==null)this.ask('gcs',SAY.gcs,{def:'skip',tries:2})};
 P.toArrest=function(quiet){const s=this.s;s.mode='arrest';s.q=[];s.cur=null;s.nextMap=null;s.bNext=null;s.sedFentT=null;s.sedMidaT=null;s.epShocks=0;s.adrHold=true;s.rhythm='?';this.log('NZK','Ponowne zatrzymanie krążenia');s.cycleT=this.now();s.warned=false;if(!quiet)this.say(SAY.rearrest);
@@ -474,16 +491,16 @@ function report(s){const L=s.log||[],end=s.tEnd||Date.now();const dur=Math.round
   ['EtCO₂',s.etco2.length?s.etco2.map(e=>e.v).join(', ')+' mmHg':'brak danych'],
   ['Noradrenalina',s.nora?fmt1(s.nora.mlh)+' ml/h ('+String(s.nora.dose).replace('.',',')+' µg/kg/min), '+NORA[s.syr].mg+' mg/'+NORA[s.syr].ml+' ml':'nie'],
   ['Dobutamina',s.dobu?fmt1(s.dobu.mlh)+' ml/h ('+fmt1(s.dobu.dose)+' µg/kg/min), 250 mg/50 ml':'nie'],['Masa ciała',s.kg?s.kg+' kg':'—'],
-  ['Ostatnie ciśnienie średnie',s.lastMap!=null?s.lastMap+' mmHg':'—'],['SpO₂',s.post.spo2!=null?s.post.spo2+'%':'—'],['EKG 12-odpr. / STEMI',(s.post.ekg||'—')+' / '+(s.post.stemi||'—')],['Bradykardia – leki',s.atropine?'atropina '+fmt1(s.atropine)+' mg ('+(s.atroN||0)+' dawek)':'—'],['Wlew w bradykardii',s.binf?BINF[s.binf.d].name+' '+fmt1(s.binf.mlh)+' ml/h ('+String(s.binf.dose).replace('.',',')+(BINF[s.binf.d].unit==='kgmin'?' µg/kg/min':' µg/min')+')':'nie'],['Stymulacja przezskórna',s.cprPace&&!s.pacing?'w trakcie RKO (załamki P bez QRS), prąd maksymalny, 70/min':s.pacing?(s.pacing.capture?'wychwyt '+s.pacing.capture+' mA, ustawione '+s.pacing.mA+' mA, 70/min':'bez wychwytu ('+(s.pacing.mA||'—')+' mA)')+', elektrody '+(s.pacing.el==='al'?'przednio-boczne':'przednio-tylne'):'nie'],['Analgosedacja',s.sed?'fentanyl '+fmt1(s.sed.fent)+' ml ('+Math.round(s.sed.fent*(s.fentConc||50))+' µg, '+(s.fentConc||50)+' µg/ml), midazolam '+fmt1(s.sed.mida)+' ml ('+fmt1(s.sed.mida*(s.midaConc||1))+' mg, '+fmt1(s.midaConc||1)+' mg/ml)':'nie'],['Temperatura',s.post.temp!=null?s.post.temp+' °C':'—'],['Glikemia',s.post.glu!=null?s.post.glu+' mg/dl':'—'],['GCS',s.post.gcs!=null?String(s.post.gcs):'—'],['Masa ciała – źródło',s.kgAssumed?'PRZYJĘTA 70 kg (nieznana)':s.kg?'podana':'—'],['Heparyna wlew',s.infs&&s.infs.hep?fmt1(s.infs.hep.mlh)+' ml/h ('+HEPR[s.infs.hep.ind]+' j./kg/h)':'nie'],['Amiodaron wlew',s.infs&&s.infs.amio?fmt1(s.infs.amio.mlh)+' ml/h (900 mg/24 h)':'nie']];
+  ['Ostatnie ciśnienie średnie',s.lastMap!=null?s.lastMap+' mmHg':'—'],['SpO₂',s.post.spo2!=null?s.post.spo2+'%':'—'],['EKG 12-odpr. / STEMI',(s.post.ekg||'—')+' / '+(s.post.stemi||'—')],['Bradykardia – leki',s.atropine?'atropina '+fmt1(s.atropine)+' mg ('+(s.atroN||0)+' dawek)':'—'],['Wlew w bradykardii',s.binf?BINF[s.binf.d].name+' '+fmt1(s.binf.mlh)+' ml/h ('+String(s.binf.dose).replace('.',',')+(BINF[s.binf.d].unit==='kgmin'?' µg/kg/min':' µg/min')+')':'nie'],['Stymulacja przezskórna',s.cprPace&&!s.pacing?'w trakcie RKO (załamki P bez QRS), prąd maksymalny, 70/min':s.pacing?(s.pacing.capture?'wychwyt '+s.pacing.capture+' mA, ustawione '+s.pacing.mA+' mA, 70/min':'bez wychwytu ('+(s.pacing.mA||'—')+' mA)')+', elektrody '+(s.pacing.el==='al'?'przednio-boczne':'przednio-tylne'):'nie'],['Analgosedacja',s.sed?'fentanyl '+fmt1(s.sed.fent)+' ml ('+Math.round(s.sed.fent*(s.fentConc||50))+' µg, '+(s.fentConc||50)+' µg/ml), midazolam '+fmt1(s.sed.mida)+' ml ('+fmt1(s.sed.mida*(s.midaConc||1))+' mg, '+fmt1(s.midaConc||1)+' mg/ml)':'nie'],['Temperatura',s.post.temp!=null?s.post.temp+' °C':'—'],['Glikemia',s.post.glu!=null?s.post.glu+' mg/dl':'—'],['GCS',s.post.gcs!=null?String(s.post.gcs):'—'],['Masa ciała – źródło',s.kgAssumed?'PRZYJĘTA 70 kg (nieznana)':s.kg?'podana':'—'],['Heparyna – bezpieczeństwo',s.hepGateTxt||'—'],['Heparyna',s.infs&&s.infs.hep?('bolus '+s.infs.hep.bu+' j. ('+fmt2(s.infs.hep.bml)+' ml)'+(s.infs.hep.aptt?'; wlew '+s.infs.hep.rate+' j./h = '+HEPR[s.infs.hep.ind]+' j./kg/h'+(s.infs.hep.rate<HEPR[s.infs.hep.ind]*s.kg?' (limit '+HEPRMAX[s.infs.hep.ind]+' j./h)':'')+', '+fmt1(s.infs.hep.mlh)+' ml/h; APTT o '+hhmm(s.infs.hep.aptt).slice(0,5):'; wlew – po ROSC')+' ('+(s.infs.hep.ind==='pe'?'zatorowość płucna':'OZW')+')'):'—'],['Amiodaron wlew',s.infs&&s.infs.amio?fmt1(s.infs.amio.mlh)+' ml/h (900 mg/24 h)':'nie']];
  const ht=HT.map(h=>[h[0],s.ht[h[0]]||'–']);
  return {sum,drugs,ht,timeline:L.map(e=>[hhmm(e.t),e.type,e.txt]),missing:sum.filter(x=>x[1]==='—').map(x=>x[0])}}
 // lista wszystkich stałych komunikatów (do generowania nagrań)
 function staticPhrases(){const a=new Set(Object.values(SAY).filter(Boolean));HT.forEach((h,i)=>{a.add(h[1]);a.add(htQ(i))});
  ['Podaj','Powiedz: podano, gdy pompa ruszy.','Czy zatrucie blokerami kanału wapniowego?','Symulacja: na monitorze rytm zatokowy, wyczuwalne tętno.'].forEach(x=>a.add(x));
  Object.keys(ENERGY).concat(Object.keys(ENERGY_SEQ)).forEach(e=>{a.add(vfInstr(e));a.add(vfInstr(e,1));a.add(vfInstr(e,2))});
- for(let m=40;m<=200;m+=10)a.add(paceUp(m));[140,200].forEach(m=>a.add(SAY.cprPace+', '+m+' miliamperów.'));for(const d of [.5,1])for(const am of [.5,1]){a.add(atroText(d,am));a.add(atroNext(d,am))}const dO={};a.add('Cztery H sprawdzone.');a.add(SAY.lucasOff+' '+SAY.gas);a.add('Cztery T sprawdzone.');a.add('Heparyna: 25000 jednostek dociągnij solą fizjologiczną do 50 mililitrów.');a.add('Amiodaron: 900 miligramów dociągnij glukozą 5 procent do 50 mililitrów.');['Noradrenalina.','Dobutamina.','Dopamina.','Zapisano: insulina z glukozą.','Zapisano: glukoza.','Zapisano: fentanyl.','Zapisano: midazolam.'].forEach(x=>a.add(x));a.add(sedText(dO));a.add(fentRepText(dO));a.add(midaRepText(dO));a.add(fentWarn(dO));['iso','dopa','adrinf'].forEach(d=>{a.add(binfPrep(d));a.add(binfPrep(d,{},false))});
+ for(let m=40;m<=200;m+=10)a.add(paceUp(m));[140,200].forEach(m=>a.add(SAY.cprPace+', '+m+' miliamperów.'));for(const d of [.5,1])for(const am of [.5,1]){a.add(atroText(d,am));a.add(atroNext(d,am))}const dO={};a.add('Cztery H sprawdzone.');a.add(SAY.lucasOff+' '+SAY.gas);a.add('Cztery T sprawdzone.');a.add(hepPrepText(25000,50));for(let kg=40;kg<=150;kg++)for(const ind of ['pe','acs'])a.add(hepBolusText(hepCalc(ind,kg,5000,25000,50).bml));a.add(SAY.hepNoInf);a.add('Amiodaron: 900 miligramów dociągnij glukozą 5 procent do 50 mililitrów.');['Noradrenalina.','Dobutamina.','Dopamina.','Zapisano: insulina z glukozą.','Zapisano: glukoza.','Zapisano: fentanyl.','Zapisano: midazolam.'].forEach(x=>a.add(x));a.add(sedText(dO));a.add(fentRepText(dO));a.add(midaRepText(dO));a.add(fentWarn(dO));['iso','dopa','adrinf'].forEach(d=>{a.add(binfPrep(d));a.add(binfPrep(d,{},false))});
  SIMR.forEach(r=>{a.add('Symulacja: na monitorze '+r+'.');a.add('Symulacja: zmiana rytmu. Na monitorze '+r+'.')});
  Object.values(SAY).forEach(t=>a.add(SAY.remind+' '+t));return [...a].filter(Boolean)}
-const API={parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
+const API={hepCalc,hepBolusText,hepPrepText,HEPB,parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
 if(typeof module!=='undefined')module.exports=API;else root.RKO=API;
 })(this);
