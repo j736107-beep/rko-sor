@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). Autor: Wujek Fido. */
 (function(root){
 'use strict';
-const VERSION='1.0';
+const VERSION='1.1';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -12,15 +12,26 @@ const NORA={50:{mg:4,ml:50,conc:80},20:{mg:2,ml:20,conc:100}}; // µg/ml
 function noraMlh(dose,kg,syr){return r1(dose*kg*60/NORA[syr||50].conc)}
 const DOBU={mg:250,ml:50,conc:5000};
 const BINT={iso:150000,adrinf:150000,dopa:300000};
-const BINF={iso:{name:'izoprenalina',mg:1,ml:50,unit:'min',start:1*5,step:1,max:20},adrinf:{name:'adrenalina we wlewie',mg:1,ml:50,unit:'min',start:2,step:1,max:10},dopa:{name:'dopamina',mg:200,ml:50,unit:'kgmin',start:5,step:2,max:10}};
+const BINF={iso:{name:'izoprenalina',mg:1,ml:50,unit:'min',start:1*5,step:1,max:20},adrinf:{name:'adrenalina we wlewie',mg:1,ml:50,unit:'min',start:2,step:1,max:10},dopa:{name:'dopamina (poza ERC – lokalny standard)',mg:200,ml:50,unit:'kgmin',start:5,step:2,max:10}};
 function binfConc(d,o){const c=Object.assign({},BINF[d],(o||{})[d]||{});c.conc=c.mg*1000/c.ml;return c}
 function binfMlh(d,dose,kg,o){const c=binfConc(d,o);return r1(c.unit==='kgmin'?dose*kg*60/c.conc:dose*60/c.conc)}
 function binfPrep(d,o,sayConc){const c=binfConc(d,o);if(d==='adrinf'){const ml=c.mg===1?'1 mililitr':c.mg+' mililitry';return 'Wlew adrenaliny. Weź '+(c.mg===1?'1 miligram':c.mg+' miligramy')+' adrenaliny, czyli '+ml+' z ampułki. Dociągnij solą fizjologiczną do '+c.ml+' mililitrów.'+(sayConc===false?'':' Stężenie '+Math.round(c.conc)+' mikrogramów na mililitr.')}const mgw=c.mg===1?'1 miligram':c.mg+' miligramów';return (d==='iso'?'Izoprenalina':d==='dopa'?'Dopamina':'Adrenalina we wlewie')+': '+mgw+' dociągnij solą fizjologiczną do '+c.ml+' mililitrów.'}
 function dobuMlh(dose,kg){return r1(dose*kg*60/DOBU.conc)}
 const ADRINF={mg:1,ml:50,conc:20}; // µg/ml, bradykardia 2–10 µg/min
 function adrInfMlh(ugmin){return r1(ugmin*60/ADRINF.conc)}
-function atroNext(amp){return 'Kolejna dawka atropiny 1 miligram, czyli '+(amp===1?'1 mililitr':'2 mililitry')+'. Powiedz: podano.'}
-function atroText(amp){return amp===1?'Podaj atropinę 1 miligram, czyli 1 mililitr. Powiedz: podano.':'Podaj atropinę 1 miligram, czyli 2 mililitry. Powiedz: podano.'}
+function volW(x){x=r1(x);return x===0.5?'pół mililitra':fmt1(x)+' '+mlWord(x)}
+function volGen(x){x=r1(x);return x===0.5?'pół mililitra':fmt1(x)+' '+(Number.isInteger(x)&&x!==1?'mililitrów':'mililitra')}
+function rangeW(a,b){return (r1(a)===0.5?'pół':fmt1(a))+' do '+volGen(b)}
+function mgW(x){return x===0.5?'pół miligrama':x===1?'1 miligram':fmt1(x)+' miligrama'}
+function atroText(dose,amp){dose=dose||.5;amp=amp||.5;return 'Podaj atropinę '+mgW(dose)+', czyli '+volW(dose/amp)+'. Powiedz: podano.'}
+function atroNext(dose,amp){dose=dose||.5;amp=amp||.5;return 'Kolejna dawka atropiny '+mgW(dose)+', czyli '+volW(dose/amp)+'. Powiedz: podano.'}
+function sedText(o){const f=o.fentConc||50,ma=o.midaAmpMg||5,mc=o.midaConc||1,mac=(o.midaAmpMg||5)/(o.midaAmpMl||1);
+ const fen='Fentanyl: nabierz '+volW(25/f)+' z ampułki, podaj powoli dożylnie.';
+ const mid=mc<mac?'Midazolam: 1 ampułkę '+ma+' miligramów rozcieńcz do '+volW(ma/mc).replace(/ mililitr\w*$/,' mililitrów')+', podaj '+rangeW(1/mc,2/mc)+' powoli.':'Midazolam bez rozcieńczania: podaj '+volW(1/mc)+' powoli.';
+ return 'Pacjent przytomny – analgezja i sedacja małymi dawkami. '+fen+' '+mid}
+function fentRepText(o){const f=o.fentConc||50;return 'Jeśli potrzeba, kolejna dawka fentanylu: '+rangeW(25/f,50/f)+'. Powiedz: podano, liczbę albo nie.'}
+function midaRepText(o){const mc=o.midaConc||1;return 'Jeśli potrzeba, midazolam '+rangeW(1/mc,2/mc)+'. Powiedz: podano, liczbę albo nie.'}
+function fentWarn(o){return 'Uwaga: łączna dawka fentanylu powyżej '+volGen(100/(o.fentConc||50))+'. Ryzyko depresji oddechu, przygotuj worek i nalokson.'}
 function mapOf(s,d){return Math.round((s+2*d)/3)}
 function noraTable(){const out=[];for(let kg=50;kg<=120;kg+=10)out.push({kg,s50:noraMlh(.05,kg,50),s20:noraMlh(.05,kg,20)});return out}
 // ---------- rozpoznawanie ----------
@@ -33,18 +44,21 @@ function parseNumber(text){const t=norm(text);const m=t.match(/\d+(?:[ ,.]\d+)?/
  return any?tot+(half?.5:0):null}
 // kolejność ma znaczenie: dłuższe frazy pierwsze
 const CMDS=[
- ['iso',/izoprenalin|isoprenalin|izuprel/],['dopa',/dopamin/],['adrinf',/adrenalin\w*(?! podan)(?!.*podan)/],['pace',/zalamki p bez qrs|zalamek p bez qrs|blok serca|blok przedsionkowo|blok av|potrzebny stymulator|stymulacj\w* przezskorn/],['alone',/nie moge uciskac|jestem sam|nikt nie uciska/],['zakoncz_tak',/\btak\b.*\bzakoncz/],['replay',/powtorz ostatnie|odtworz instrukcj|^powtorz\b|\bpowtorz$/],
- ['send',/wyslij/],['adr',/adrenalin\w* podan|podan\w* adrenalin/],['amio',/amiodaron\w* podan/],['lido',/lidokain\w* podan/],
- ['shock_done',/defibrylacj\w* wykonan|wyladowan\w*|wyladowano/], ['organised0',/migotanie przedsionkow/],['shockable',/migotanie|\bvf\b|\bp ?vt\b|\bvt\b|czestoskurcz komorowy|defibrylacj|do defibrylacji/],
+ ['iso',/izoprenalin|isoprenalin|izuprel/],['dopa',/dopamin/],['nora',/noradrenalin/],['dobu',/dobutamin/],['hepinf',/wlew\w* heparyn|heparyn\w* (we )?wlew/],['amioinf',/wlew\w* amiodaron|amiodaron\w* (we )?wlew/],['adrinf',/wlew\w* adrenalin|\badrenalin\w* (we )?wlew/],['pace',/zalamki p bez qrs|zalamek p bez qrs|blok serca|blok przedsionkowo|blok av|potrzebny stymulator|stymulacj\w* przezskorn/],['alone',/nie moge uciskac|jestem sam|nikt nie uciska/],['zakoncz_tak',/\btak\b.*\bzakoncz/],['replay',/powtorz ostatnie|odtworz instrukcj|^powtorz\b|\bpowtorz$/],
+ ['send',/wyslij/],['adr',/\badrenalin\w* podan|podan\w* adrenalin/],['amio',/amiodaron\w* podan/],['lido',/lidokain\w* podan/],
+ ['nonshock',/nie do defibrylacji|brak wskazan|bez wskazan|nie defibrylowa|nie defibryluj/],['shock_done',/defibrylacj\w* wykonan|wyladowan\w*|wyladowano/], ['organised0',/migotanie przedsionkow/],['shockable',/migotanie|\bvf\b|\bp ?vt\b|\bvt\b|czestoskurcz komorowy|defibrylacj|do defibrylacji/],
  ['nopulse',/brak tetna|nie ma tetna|bez tetna/],
  ['pulse',/jest tetno|wyczuwalne tetno|tetno jest|mam tetno/],['brady',/bradykardi/],
  ['nonshock',/brak wskazan|nie do defibrylacji|asystoli|\bpea\b|rozkojarzenie|aktywnosc elektryczna bez/],
  ['organised',/rytm zatokowy|zatokowy|rytm zorganizowany|zorganizowany|wezlowy/],['intub',/intubacj|zaintubowan/],['usg',/\busg\b|u s g|pocus|ultrasonograf/],
- ['rosc',/\brosc\b|ros[ck]|powrot krazenia/],['arrest',/zatrzymanie/],['up',/zwieksz/],['keep',/utrzymaj/],['pause',/pauza/],['end',/zakoncz/],
+ ['rosc',/\brosc\b|ros[ck]|powrot krazenia/],['arrest',/zatrzymanie/],['up',/zwieksz/],['keep',/utrzymaj/],['pause',/pauza|^stop\b|\bstop$/],['down',/zmniejsz/],['end',/zakoncz/],
  ['given',/podano|podane|podalem|podalam/],['bicarb',/wodoroweglan/],['change',/zmien rytm/],
- ['sor',/w sor|\bsor\b|na sor/],['brought',/przywiez/],['present',/^jest\b|jestem/],['checked',/sprawdzon|wykluczon/],['next',/dalej|nastepn|gotowe|gotowa/],
+ ['sor',/w sor|\bsor\b|na sor/],['brought',/przywiez/],['present',/^jest\b|jestem/],['checked',/sprawdzon|wykluczon/],['next',/dalej|nastepn|gotowe|gotowa|pomin/],['unknown',/nie wiem/],['kg',/kilogram|\bwaga\b|\bmasa\b/],
  ['s20',/dwadziescia|\b20\b/],['s50',/piecdziesiat|\b50\b/],
  ['yes',/^tak\b|\btak$|potwierdzam|zgadza/],['no',/^nie\b|\bnie$/]];
+function parsePair(text){const t=norm(text).replace(/\//g,' na ');const p=t.split(/ na /);if(p.length!==2)return null;const a=parseNumber(p[0]),b=parseNumber(p[1]);return a!=null&&b!=null?[a,b]:null}
+const CRIT=['pause','arrest','shock_done','replay'];
+function bargeIn(heard,speaking){const h=norm(heard);if(!h)return 'ignore';if(speaking&&norm(speaking).includes(h))return 'ignore';const c=matchCommand(heard);return CRIT.includes(c)?'interrupt':'queue'}
 function matchCommand(text){const t=norm(text);if(!t)return null;for(const [id,re] of CMDS)if(re.test(t))return id==='organised0'?'organised':id;return null}
 function interpret(alts){alts=[].concat(alts||[]);for(const a of alts){const c=matchCommand(a);if(c)return {cmd:c,num:parseNumber(a),text:a}}
  for(const a of alts){const n=parseNumber(a);if(n!=null)return {cmd:'number',num:n,text:a}}return {cmd:null,num:null,text:alts[0]||''}}
@@ -71,13 +85,11 @@ const SAY={
  paceOk:'Wychwyt. Dodaj 10 miliamperów zapasu. Sprawdź tętno na tętnicy udowej, nie na szyjnej.',
  pacePulse:'Jest tętno na tętnicy udowej?',
  pacePEA:'Brak tętna mimo wychwytu. To PEA. Rozpocznij uciskanie, wracam do algorytmu NZK.',
- paceMax:'Maksymalny prąd bez wychwytu. Sprawdź elektrody, rozważ stymulację przezżylną, wezwij kardiologa.',
+ paceMax:'Maksymalny prąd bez wychwytu. Wezwij kardiologa. Sprawdź elektrody i ich położenie. Następny krok: wlew leku przyspieszającego i stymulacja przezżylna.',
+ paceAnalg:'Jeśli pacjent przytomny, przed zwiększaniem prądu podaj analgezję.',
  paceConsc:'Czy pacjent jest przytomny?',
- paceSed:'Pacjent przytomny – analgezja i sedacja małymi dawkami. Fentanyl: nabierz pół mililitra z ampułki, podaj powoli dożylnie. Midazolam: 1 ampułkę 5 miligramów rozcieńcz do 5 mililitrów, podaj 1 do 2 mililitrów powoli.',
  paceMon:'Monitoruj oddech, saturację i ciśnienie. Miej przygotowany worek z maską i ssak.',
  fentGo:'Ile mililitrów fentanylu podano? Powiedz liczbę albo: podano.',midaGo:'Ile mililitrów midazolamu podano? Powiedz liczbę albo: podano.',
- fentRep:'Jeśli potrzeba, kolejna dawka fentanylu: pół do 1 mililitra. Powiedz: podano, liczbę albo nie.',
- midaRep:'Jeśli potrzeba, midazolam 1 do 2 mililitrów. Powiedz: podano, liczbę albo nie.',
  midaMax:'Maksymalna dawka midazolamu.',
  paceNoSed:'Pacjent nieprzytomny. Bez sedacji, monitoruj.',
  bradyFail:'Atropina nieskuteczna. Przechodzę do stymulacji przezskórnej.',
@@ -99,16 +111,29 @@ const SAY={
  etco2:'Podaj wartość CO2 w wydychanym powietrzu.',
  usg:'Zapisano USG. Tylko w przerwie na ocenę rytmu, przerwa poniżej 10 sekund.',
  calcium:'Podaj chlorek wapnia 10 procent, 10 mililitrów, czyli 1 gram. Powiedz: podano.',
+ insulin:'Podaj insulinę krótko działającą 10 jednostek z glukozą 25 gramów, czyli 50 mililitrów glukozy 50-procentowej. Powiedz: podano.',
+ glucose:'Podaj glukozę 20 procent, 100 mililitrów, czyli 20 gramów. Powiedz: podano.',
  bicarbQ:'Wodorowęglan nie rutynowo. Czy jest wskazanie: zatrucie trójcyklicznymi, hiperkaliemia z arytmią, kwasica hipochloremiczna lub długie zatrzymanie z potwierdzoną kwasicą?',
- bicarb:'Podaj wodorowęglan sodu 50 milimoli, czyli 50 mililitrów ośmioprocentowego. Powiedz: podano.',
+ bicarb:'Podaj wodorowęglan sodu 50 milimoli, czyli 50 mililitrów 8,4-procentowego. Powiedz: podano.',
  bicarbNo:'Nie podawaj wodorowęglanu.',
  lysis:'Tromboliza. Alteplaza 50 miligramów bolus, czyli 50 mililitrów. Potem heparyna 5000 jednostek, czyli 1 mililitr. Kontynuuj resuscytację 60 do 90 minut. Powiedz: podano.',
  decision:'Dwadzieścia minut resuscytacji. Rozważ: CO2 w wydychanym powietrzu, przyczynę odwracalną, hipotermię i możliwość ECPR. Decyzja należy do lekarza. Prowadzę dalej.',
  endQ:'Zakończyć resuscytację? Powiedz: tak, zakończ.',
+ adrinfArrest:'W trakcie zatrzymania krążenia adrenalina tylko w bolusie, 1 miligram.',
+ weightAssume:'Przyjmuję 70 kilogramów, popraw jeśli inaczej.',
+ tube:'Podaj rozmiar rurki.',usgRes:'Wynik USG? Powiedz krótko, na przykład: tamponada, odma, brak ruchów serca albo bez zmian.',
+ glu:'Podaj glikemię.',gcs:'Podaj punktację GCS.',
+ zrmAmio:'Ile miligramów amiodaronu podał zespół ratownictwa?',
+ which:'Który lek zmienić: noradrenalina, dobutamina czy wlew w bradykardii?',
+ downPump:'Zmniejszam. Ustaw pompę',
+ noraLow:'Noradrenalina na dawce minimalnej. Rozważ wyłączenie pompy.',
+ dobuMax:'Maksymalna dawka dobutaminy. Wezwij anestezjologa.',
+ hepQ:'Wlew heparyny: zatorowość płucna czy ostry zespół wieńcowy?',
+ stacked:'Monitorowane zatrzymanie: rozważ do 3 wyładowań seryjnych, potem uciskanie.',
  endCancel:'Nie zakończono. Prowadzę dalej.',
  ended:'Zakończono. Raport jest gotowy.',
  rosc:'Powrót krążenia. Saturacja 94 do 98 procent, EKG 12-odprowadzeniowe, temperatura. Zaczynam pętlę ciśnienia.',
- rearrest:'Ponowne zatrzymanie krążenia. Ucisk teraz. Kolejne dwie minuty.',
+ rearrest:'Ponowne zatrzymanie krążenia. Ucisk teraz.',
  sys:'Podaj aktualne ciśnienie skurczowe.',dia:'Podaj aktualne ciśnienie rozkurczowe.',
  sysAgain:'Powtórz ciśnienie skurczowe.',diaAgain:'Powtórz ciśnienie rozkurczowe.',
  weight:'Podaj masę ciała w kilogramach.',
@@ -149,19 +174,19 @@ const SAY={
 };
 const PACEMAX={mindray:{mA:200,label:'Mindray BeneHeart D3/D6: 0–200 mA'},zoll:{mA:140,label:'ZOLL X Series / R Series: 10–140 mA'},lp15:{mA:200,label:'LIFEPAK 15/20: 0–200 mA'}};
 const ENERGY_SEQ={mindray:['200','300','360']};
-const ENERGY={mindray:'200 dżuli','300':'300 dżuli','150-200':'150 do 200 dżuli','150':'150 dżuli','200':'200 dżuli','120-150':'120 do 150 dżuli','360':'360 dżuli','max':'maksymalną energią defibrylatora'};
+const ENERGY={'300':'300 dżuli','150-200':'150 do 200 dżuli','150':'150 dżuli','200':'200 dżuli','120-150':'120 do 150 dżuli','360':'360 dżuli','max':'maksymalną energią defibrylatora'};
 const ENERGY_LABEL={mindray:'Mindray BeneHeart D3/D6 (dwufazowa BTE): 200 → 300 → 360 J (domyślne fabryczne)','150-200':'150–200 J (dwufazowy, ERC)','150':'150 J','200':'200 J','120-150':'120–150 J (dwufazowy prostokątny)','360':'360 J (jednofazowy)','max':'maksymalna energia defibrylatora'};
 function energyFor(e,n){const q=ENERGY_SEQ[e];return q?q[Math.min(n||0,q.length-1)]:e}
-function vfInstr(e,n){const k=energyFor(e,n);return 'Defibrylacja. Ładuj '+(ENERGY[k]||ENERGY['150-200'])+' dwufazowo. Uciskaj w trakcie ładowania. Wszyscy odsuń się, tlen precz. Wyładowanie. Potem natychmiast ucisk na 2 minuty.'}
+function vfInstr(e,n){const k=energyFor(e,n);const w=e==='360'?' jednofazowo':e==='max'?'':' dwufazowo';return 'Defibrylacja. Ładuj '+(ENERGY[k]||ENERGY['150-200'])+w+'. Uciskaj w trakcie ładowania. Wszyscy odsuń się, odsuń tlen. Wyładowanie. Potem natychmiast ucisk na 2 minuty.'}
 const HT=[['hipoksja','Hipoksja: tlen 100 procent, sprawdź rurkę i wentylację.'],['hipowolemia','Hipowolemia: płyny, krew, zatrzymaj krwawienie.'],
- ['hiperkaliemia','Hiperkaliemia lub zaburzenia elektrolitowe.'],['hipotermia','Hipotermia: ogrzewanie, rozważ ECPR.'],
- ['zakrzepica','Zatorowość płucna lub zawał.'],['odma','Odma prężna: odbarcz klatkę.'],['tamponada','Tamponada: nakłucie osierdzia.'],['toksyny','Toksyny i leki.']];
+ ['hiperkaliemia','Hiperkaliemia: wapń, insulina z glukozą, rozważ wodorowęglan.'],['hipoglikemia','Hipoglikemia: glukoza dożylnie.'],['hipomagnezemia','Hipomagnezemia: siarczan magnezu.'],['hipotermia','Hipotermia: ogrzewanie, rozważ ECPR.'],
+ ['zatorowość płucna','Zatorowość płucna: rozważ trombolizę.'],['zawał','Zawał: rozważ pilną koronarografię i PCI, także w trakcie RKO z LUCAS.'],['odma','Odma prężna: odbarcz klatkę.'],['tamponada','Tamponada: nakłucie osierdzia.'],['toksyny','Toksyny i leki.']];
 function paceUp(mA){return 'Zwiększ do '+mA+' miliamperów.'}
-function htQ(i){return 'Przyczyna '+(i+1)+' z 8: '+HT[i][0]+'. Czy to przyczyna? Tak, nie albo dalej.'}
+function htQ(i){return 'Przyczyna '+(i+1)+' z '+HT.length+': '+HT[i][0]+'. Czy to przyczyna? Tak, nie albo dalej.'}
 // ---------- silnik ----------
 const MS=1000,CYCLE=120*MS,REM=10*MS,ADRI=4*60*MS,MAPI=5*60*MS;
 function Engine(opt){opt=opt||{};const E=this;E.now=opt.now||(()=>Date.now());E.out=opt.out||(()=>{});E.alarm=opt.alarm||(()=>{});E.persist=opt.persist||(()=>{});E.rand=opt.rand||Math.random;
- E.energy=opt.energy||'mindray';E.paceEl=opt.paceEl||'ap';E.paceMax=opt.paceMax||200;E.fentConc=opt.fentConc||50;E.midaConc=opt.midaConc||1;E.atroAmp=opt.atroAmp||0.5;E.conc=opt.conc||{};E.sayConc=opt.sayConc!==false;E.s={mode:'idle'};}
+ E.energy=opt.energy||'mindray';E.paceEl=opt.paceEl||'ap';E.paceMax=opt.paceMax||200;E.fentConc=opt.fentConc||50;E.midaConc=opt.midaConc||1;E.midaAmpMg=opt.midaAmpMg||5;E.midaAmpMl=opt.midaAmpMl||1;E.atroAmp=opt.atroAmp||0.5;E.atroDose=opt.atroDose||0.5;E.stacked=!!opt.stacked;E.mapHigh=opt.mapHigh||90;E.hep=Object.assign({u:25000,ml:50},opt.hep||{});E.amioInf=Object.assign({mg:900,ml:50},opt.amioInf||{});E.conc=opt.conc||{};E.sayConc=opt.sayConc!==false;E.s={mode:'idle'};}
 const P=Engine.prototype;
 P.say=function(t,kind){this.s.last=t;this.out(t,kind||'say')};
 P.log=function(type,txt,extra){const s=this.s;const e=Object.assign({t:this.now(),type,txt},extra||{});s.log.push(e);this.persist(s);return e};
@@ -191,12 +216,13 @@ P.tick=function(){const s=this.s,now=this.now();if(s.mode==='idle'||s.mode==='en
  if(s.mode==='arrest'){const el=now-s.cycleT;
   if(!s.warned&&el>=CYCLE-15*MS){s.warned=true;this.say(SAY.warn15)}
   if(el>=CYCLE&&!this.has('rhythm')){s.offStart=now;if(s.sim)this.simShow();this.ask('rhythm',s.cprPace?SAY.rhythmPace:SAY.rhythm,{prio:2})}
-  if(s.adrDue&&now>=s.adrDue&&!this.has('adr')){this.ask('adr',SAY.adr,{prio:1})}
+  if(s.adrDue&&!s.adrHold&&now>=s.adrDue&&!this.has('adr')){this.ask('adr',SAY.adr,{prio:1})}
   if(!s.decided&&now-s.arrestT>=20*60*MS){s.decided=true;this.say(SAY.decision);this.log('decyzja','20 min RKO – omówienie kontynuacji')}
   if(s.sim&&now-(s.simSaid||s.t0)>=CYCLE){s.simSaid=now;this.say(SAY.sim,'sim')}}
- if(s.sedFentT&&now>=s.sedFentT&&!this.has('fentRep')){s.sedFentT=null;this.ask('fentRep',SAY.fentRep,{prio:1,def:'skip',tries:1})}
- if(s.sedMidaT&&now>=s.sedMidaT&&!this.has('midaRep')){s.sedMidaT=null;this.ask('midaRep',SAY.midaRep,{prio:1,def:'skip',tries:1})}
- if(s.bNext&&now>=s.bNext&&!this.has('bHR')&&!this.has('bSBP')&&!this.has('bSym')){s.bNext=null;this.ask('bHR',SAY.bHR,{prio:2,def:'skip',tries:2})}
+ if(s.mode!=='arrest'){
+ if(s.sedFentT&&now>=s.sedFentT&&!this.has('fentRep')){s.sedFentT=null;this.ask('fentRep',fentRepText(this),{prio:1,def:'skip',tries:1})}
+ if(s.sedMidaT&&now>=s.sedMidaT&&!this.has('midaRep')){s.sedMidaT=null;this.ask('midaRep',midaRepText(this),{prio:1,def:'skip',tries:1})}
+ if(s.bNext&&now>=s.bNext&&!this.has('bHR')&&!this.has('bSBP')&&!this.has('bSym')){s.bNext=null;this.ask('bHR',SAY.bHR,{prio:2,def:'skip',tries:2})}}
  if(s.mode==='rosc'&&s.nextMap&&now>=s.nextMap&&!this.has('sys')&&!this.has('dia')){s.nextMap=null;this.ask('sys',SAY.sys,{tries:Infinity})}};
 P.newCycle=function(txt){const s=this.s,now=this.now();if(s.offStart){const off=(now-s.offStart)/MS;s.handsOff+=off;s.maxOff=Math.max(s.maxOff,off);s.offStart=null}
  s.cycleT=now;s.warned=false;s.cycles++;if(txt)this.say(txt);
@@ -211,26 +237,30 @@ P.giveAmio=function(lido){const s=this.s;const first=(s.amio+s.lido)===0;if(lido
 P.shockDone=function(){const s=this.s;s.shocks++;this.drop('shock');this.log('wyładowanie','Wyładowanie nr '+s.shocks,{n:s.shocks});
  if(s.sim)this.simAfterShock();
  this.newCycle(SAY.afterShock);
- if(s.shocks===3){if(!s.adrDue)this.ask('adr',SAY.adr,{prio:1});this.ask('amio',SAY.amio300,{prio:1})}
- if(s.shocks===5)this.ask('amio',SAY.amio150,{prio:1})};
+ s.epShocks=(s.epShocks||0)+1;const am=s.amio+s.lido,now=this.now();
+ if(s.epShocks>=3&&!this.has('adr')&&(!s.adrDue||s.adrDue<=now)){s.adrHold=false;this.ask('adr',SAY.adr,{prio:1})}
+ if(s.shocks>=3&&am===0&&!this.has('amio'))this.ask('amio',SAY.amio300,{prio:1});
+ else if(s.shocks>=5&&am===1&&!this.has('amio'))this.ask('amio',SAY.amio150,{prio:1})};
 P.setRhythm=function(shockable){const s=this.s;s.rhythm=shockable?'VF/pVT':'asystolia/PEA';this.drop('rhythm');this.log('rytm',shockable?'Rytm do defibrylacji (VF/pVT)':'Rytm nie do defibrylacji (asystolia/PEA)',{shockable});
- if(shockable){this.say(vfInstr(this.energy,s.shocks)+(s.shocks>=1&&!ENERGY_SEQ[this.energy]&&this.energy!=='max'?' '+SAY.escal:''));this.log('energia','Energia: '+energyFor(this.energy,s.shocks)+(/^\d/.test(energyFor(this.energy,s.shocks))?' J':''));this.ask('shock',SAY.shock,{prio:2});
+ if(shockable){this.say(vfInstr(this.energy,s.shocks)+(s.shocks>=1&&!ENERGY_SEQ[this.energy]&&this.energy!=='max'?' '+SAY.escal:''));this.log('energia','Energia: '+energyFor(this.energy,s.shocks)+(/^\d/.test(energyFor(this.energy,s.shocks))?' J':''));if(this.stacked&&s.shocks===0&&s.scen!=='przywieziony')this.say(SAY.stacked);this.ask('shock',SAY.shock,{prio:2});
   if(!s.torsadeAsked){s.torsadeAsked=true;this.ask('torsade',SAY.torsade,{def:'no',tries:1})}}
- else{this.newCycle(SAY.nonshockI);if(!s.adr.length)this.ask('adr',SAY.adrNow,{prio:1})}};
+ else{this.newCycle(SAY.nonshockI);s.adrHold=false;if(!s.adrDue||s.adrDue<=this.now())this.ask('adr',SAY.adrNow,{prio:1})}};
 P.onRhythmCmd=function(c){const s=this.s;this.drop('rhythm');
  if(c==='shockable'){this.setRhythm(true);return true}if(c==='nonshock'||c==='nopulse'){this.setRhythm(false);return true}
  if(c==='organised'){this.log('rytm','Rytm zorganizowany – sprawdzenie tętna');this.ask('pulse',SAY.pulseQ,{prio:2});return true}
  if(c==='pulse'){this.newCycle();this.toRosc();return true}
  if(c==='brady'){this.newCycle();this.log('rytm','Bradykardia z tętnem');this.toRosc();this.startBrady();return true}return false};
 // odpowiedź na bieżące pytanie
-P.answer=function(q,r){const s=this.s,c=r.cmd,yes=c==='yes'||c==='given'||c==='present'||c==='checked',no=c==='no'||c==='next';
+P.answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd:'default',def:q.def,skip:true};else return false}
+ const s=this.s,c=r.cmd,yes=c==='yes'||c==='given'||c==='present'||c==='checked',no=c==='no';
  const def=c==='default';const D=def?r.def:null;
  switch(q.id){
  case 'scen':if(c==='brought'||D==='brought'){s.scen='przywieziony';this.log('scenariusz','Pacjent przywieziony w trakcie RKO');this.ask('mins',SAY.mins,{def:'skip',tries:2})}
   else if(c==='sor'||def){s.scen='SOR';this.log('scenariusz','NZK w SOR')}else return false;break;
- case 'mins':if(r.num!=null){s.arrestT=this.now()-r.num*60*MS;this.log('scenariusz','RKO trwa od '+r.num+' min');this.ask('zrmAdr',SAY.zrmAdr,{def:'skip',tries:1});this.ask('zrmShk',SAY.zrmShk,{def:'skip',tries:1})}else if(!def)return false;break;
- case 'zrmAdr':if(r.num!=null){this.log('lek','ZRM: adrenalina łącznie '+r.num+' mg',{drug:'adrenalina (ZRM)',dose:r.num+' mg'});if(r.num>0)s.adrDue=this.now()+3*60*MS}else if(!def&&!no)return false;break;
- case 'zrmShk':if(r.num!=null){s.shocks+=r.num;this.log('wyładowanie','ZRM: '+r.num+' wyładowań')}else if(!def&&!no)return false;break;
+ case 'mins':if(r.num!=null){s.arrestT=this.now()-r.num*60*MS;this.log('scenariusz','RKO trwa od '+r.num+' min');this.ask('zrmAdr',SAY.zrmAdr,{def:'skip',tries:1});this.ask('zrmShk',SAY.zrmShk,{def:'skip',tries:1});this.ask('zrmAmio',SAY.zrmAmio,{def:'skip',tries:1})}else if(!def)return false;break;
+ case 'zrmAdr':if(r.num!=null){const n=Math.round(r.num),now=this.now();for(let k=0;k<n;k++)s.adr.push(now);this.log('lek','ZRM: adrenalina łącznie '+n+' mg',{drug:'adrenalina (ZRM)',dose:n+' mg',zrm:true});if(n>0)s.adrDue=now+3*60*MS}else if(!def&&!no)return false;break;
+ case 'zrmAmio':if(r.num!=null){if(r.num>=300)s.amio++;if(r.num>=450)s.amio++;this.log('lek','ZRM: amiodaron łącznie '+r.num+' mg',{drug:'amiodaron (ZRM)',dose:r.num+' mg'})}else if(!def&&!no)return false;break;
+ case 'zrmShk':if(r.num!=null){s.shocks+=r.num;s.epShocks=(s.epShocks||0)+r.num;this.log('wyładowanie','ZRM: '+r.num+' wyładowań')}else if(!def&&!no)return false;break;
  case 'team':if(yes||def)this.log('zespół','Role przydzielone');else return false;break;
  case 'rhythm':if(!this.onRhythmCmd(c))return false;break;
  case 'pulse':if(yes||c==='pulse'){this.newCycle();this.toRosc()}else if(no||c==='nopulse'){this.setRhythm(false)}else return false;break;
@@ -245,15 +275,17 @@ P.answer=function(q,r){const s=this.s,c=r.cmd,yes=c==='yes'||c==='given'||c==='p
  case 'ht':{const i=q.data;if(yes){s.ht[HT[i][0]]='✓';this.log('4H4T',HT[i][0]+': potwierdzona');this.say(HT[i][1]);this.htTreat(i)}
   else if(no){s.ht[HT[i][0]]='✗';this.log('4H4T',HT[i][0]+': wykluczona')}else if(def){s.ht[HT[i][0]]='–'}else return false;s.htIdx=i+1;break}
  case 'ccb':if(yes){this.ask('calcium',SAY.calcium)}else if(!no&&!def)return false;this.ask('tca',SAY.bicarbQ,{def:'no',tries:1});break;
+ case 'insulin':if(yes){this.log('lek','Insulina 10 j. + glukoza 25 g (50 ml 50%)',{drug:'insulina+glukoza',dose:'10 j. / 25 g'});this.say(SAY.logged+' insulina z glukozą.','ack')}else return false;break;
+ case 'glucose':if(yes){this.log('lek','Glukoza 20% 100 ml (20 g)',{drug:'glukoza',dose:'20 g'});this.say(SAY.logged+' glukoza.','ack')}else return false;break;
  case 'calcium':if(yes){this.log('lek','Chlorek wapnia 10% 10 ml (1 g)',{drug:'wapń',dose:'1 g'});this.say(SAY.logged+' wapń.','ack')}else return false;break;
  case 'tca':case 'bicarbQ':if(yes)this.ask('bicarb',SAY.bicarb);else if(no||def){this.say(SAY.bicarbNo);this.log('lek','Wodorowęglan – brak wskazania')}else return false;break;
  case 'bicarb':if(yes){this.log('lek','Wodorowęglan sodu 8,4% 50 ml (50 mmol)',{drug:'wodorowęglan',dose:'50 mmol'});this.say(SAY.logged+' wodorowęglan.','ack')}else return false;break;
  case 'lysis':if(yes){s.lysisT=this.now();this.log('lek','Alteplaza 50 mg bolus + heparyna 5000 j.m.',{drug:'trombolityk+heparyna',dose:'50 mg / 5000 j.m.'});this.say(SAY.logged+' tromboliza. Kontynuuj 60 do 90 minut.','ack')}else return false;break;
- case 'endQ':s.endAsk=false;if(c==='zakoncz_tak'){this.finish();return true}this.say(SAY.endCancel);break;
+ case 'endQ':s.endAsk=false;if(c==='zakoncz_tak'||c==='yes'){this.finish();return true}this.say(SAY.endCancel);break;
  // ---- po ROSC ----
- case 'sys':if(r.num!=null&&r.num>=30&&r.num<=300){s.sysV=r.num;this.ask('dia',SAY.dia,{prio:1})}else{if(def)return true;this.ask('sys',SAY.sysAgain,{prio:1});return true}break;
+ case 'sys':{const pr=parsePair(r.text);if(pr&&pr[0]>=30&&pr[0]<=300&&pr[1]>=10&&pr[1]<=200){s.sysV=pr[0];this.onMap(mapOf(pr[0],pr[1]),pr[0],pr[1]);break}}if(r.num!=null&&r.num>=30&&r.num<=300){s.sysV=r.num;this.ask('dia',SAY.dia,{prio:1})}else{if(def)return true;this.ask('sys',SAY.sysAgain,{prio:1});return true}break;
  case 'dia':if(r.num!=null&&r.num>=10&&r.num<=200){this.onMap(mapOf(s.sysV,r.num),s.sysV,r.num)}else{this.ask('dia',SAY.diaAgain,{prio:1});return true}break;
- case 'weight':if(r.num!=null&&r.num>=20&&r.num<=250)s.kg=r.num;else if(def)s.kg=70;else return false;this.log('masa','Masa ciała '+s.kg+' kg'+(def?' (domyślnie)':''));if(s.binfPending)this.startBinf(s.binfPending);else this.contNora();break;
+ case 'weight':{let as=false;if(r.num!=null&&r.num>=20&&r.num<=250)s.kg=r.num;else if(def||c==='unknown'||c==='no'){s.kg=70;as=true;s.kgAssumed=true;this.say(SAY.weightAssume)}else return false;this.log('masa','Masa ciała '+s.kg+' kg'+(as?' (PRZYJĘTA – nieznana)':''))}if(s.infPending)this.startInf(...s.infPending);else if(s.binfPending)this.startBinf(s.binfPending);else this.contNora();break;
  case 'syr':if(c==='s20')s.syr=20;else if(c==='s50'||def)s.syr=50;else return false;this.contNora();break;
  case 'noraGo':if(yes)this.log('lek','Noradrenalina – pompa uruchomiona '+flowPhrase(s.nora.mlh));else return false;break;
  case 'lowOut':if(yes)this.startDobu();else if(no||def){s.dobuAsked=true;this.say(SAY.dobuNo)}else return false;break;
@@ -263,45 +295,75 @@ P.answer=function(q,r){const s=this.s,c=r.cmd,yes=c==='yes'||c==='given'||c==='p
  case 'stemi':if(yes){s.post.stemi='TAK';this.log('po ROSC','STEMI – kontakt z pracownią hemodynamiki')}else if(no){s.post.stemi='nie'}else if(!def)return false;break;
  case 'temp':if(r.num!=null){s.post.temp=r.num;this.log('po ROSC','Temperatura '+r.num+' °C')}else if(!def)return false;break;
  case 'bradySigns':if(yes){this.log('bradykardia','Objawy niepokojące: TAK');this.ask('bradyHtx',SAY.bradyHtx,{prio:2,def:'no',tries:1})}else if(no||def){this.log('bradykardia','Bez objawów niepokojących');this.say(SAY.bradyNoSigns)}else return false;break;
- case 'bradyHtx':if(yes){this.log('bradykardia','Mobitz II / blok III° / przeszczep serca');this.say(SAY.bradyHtxYes);this.startPacing();this.ask('bradyDrug',SAY.bradyDrug,{def:'iso',tries:2})}else if(no||def){this.ask('atro',atroText(this.atroAmp),{prio:2})}else return false;break;
- case 'atro':if(yes){s.atropine++;this.log('lek','Atropina 1 mg i.v. (łącznie '+s.atropine+' mg)',{drug:'atropina',dose:'1 mg'});this.say(SAY.logged+' atropina.','ack');
-  if(s.atropine>=3){s.bNext=null;this.say(SAY.atroMax);this.startPacing();this.ask('bradyDrug',SAY.bradyDrug,{def:'iso',tries:2})}else{s.bphase='atro';s.bNext=this.now()+3*60*MS}}else return false;break;
- case 'bradyDrug':{const d=['iso','dopa','adrinf'].includes(c)?c:(def?'iso':null);if(!d)return false;this.startBinf(d);break}
+ case 'bradyHtx':if(yes){this.log('bradykardia','Mobitz II / blok III° / przeszczep serca');this.say(SAY.bradyHtxYes);this.startPacing();this.ask('bradyDrug',SAY.bradyDrug,{def:'iso',tries:2})}else if(no||def){this.ask('atro',atroText(this.atroDose,this.atroAmp),{prio:2})}else return false;break;
+ case 'atro':if(yes){s.atropine=r1(s.atropine+this.atroDose);s.atroN=(s.atroN||0)+1;this.log('lek','Atropina '+fmt1(this.atroDose)+' mg i.v. (łącznie '+fmt1(s.atropine)+' mg, '+s.atroN+'. dawka)',{drug:'atropina',dose:fmt1(this.atroDose)+' mg'});this.say(SAY.logged+' atropina.','ack');
+  if(s.atropine>=3-1e-9){s.bNext=null;this.say(SAY.atroMax);this.startPacing();this.ask('bradyDrug',SAY.bradyDrug,{def:'iso',tries:2})}else{s.bphase='atro';s.bNext=this.now()+3*60*MS}}else return false;break;
+ case 'bradyDrug':{const d=['iso','dopa','adrinf'].includes(c)?c:/adrenalin/.test(norm(r.text))?'adrinf':(def?'iso':null);if(!d)return false;this.startBinf(d);break}
+ case 'which':{const t=norm(r.text);const k=/noradrenalin/.test(t)?'nora':/dobutamin/.test(t)?'dobu':/izopren|dopamin|adrenalin|bradykard|wlew/.test(t)?'binf':null;if(!k||!this.titratable().includes(k))return false;this.titrate(k,q.data);break}
+ case 'hepQ':{const t=norm(r.text);const ind=/zator|pe\b|plucn/.test(t)?'pe':/wiencow|zawal|acs|ozw/.test(t)?'acs':null;if(!ind)return false;this.startInf('hep',ind);break}
+ case 'infGo':if(yes)this.log('lek',q.data+' – pompa uruchomiona');else if(!def)return false;break;
+ case 'tube':if(r.num!=null&&r.num>=2&&r.num<=10){s.tube=r.num;this.log('drogi oddechowe','Rurka nr '+fmt1(r.num))}else if(!def)return false;break;
+ case 'usgRes':if(def)break;if(!r.text)return false;s.usgRes=(s.usgRes?s.usgRes+'; ':'')+r.text;this.log('POCUS','Wynik: '+r.text);break;
+ case 'glu':if(r.num!=null){s.post.glu=r.num;this.log('po ROSC','Glikemia '+r.num+' mg/dl')}else if(!def)return false;break;
+ case 'gcs':if(r.num!=null&&r.num>=3&&r.num<=15){s.post.gcs=r.num;this.log('po ROSC','GCS '+r.num)}else if(!def)return false;break;
  case 'adrinfQ':if(yes)this.startBinf('adrinf');else if(no||def)this.say(SAY.adrinfNo);else return false;break;
  case 'bHR':if(r.num!=null){s.bAss={hr:r.num};this.ask('bSBP',SAY.bSBP,{prio:2,def:'skip',tries:2})}else if(def){s.bAss={hr:null};this.ask('bSBP',SAY.bSBP,{prio:2,def:'skip',tries:2})}else return false;break;
- case 'bSBP':if(r.num!=null||def){s.bAss.sbp=r.num==null?null:r.num;this.ask('bSym',SAY.bSym,{prio:2,def:'no',tries:1})}else return false;break;
+ case 'bSBP':{const pr=parsePair(r.text);if(pr)r.num=pr[0]}if(r.num!=null||def){s.bAss.sbp=r.num==null?null:r.num;this.ask('bSym',SAY.bSym,{prio:2,def:'no',tries:1})}else return false;break;
  case 'bSym':if(yes||no||def){const a=s.bAss;a.res=!!yes;this.log('bradykardia','Ocena: HR '+(a.hr??'—')+', skurczowe '+(a.sbp??'—')+', objawy '+(a.res?'ustąpiły':'utrzymują się'));this.bDecide()}else return false;break;
  case 'binfGo':if(yes)this.log('lek',BINF[s.binf.d].name+' – pompa uruchomiona');else if(!def)return false;s.bphase='binf';s.bNext=this.now()+BINT[s.binf.d];break;
  case 'pace1':case 'pace2':case 'pace3':if(yes||no||def){const n=+q.id.slice(4);if(n<3)this.ask('pace'+(n+1),SAY['pace'+(n+1)],{prio:2,def:'go',tries:Infinity});else{this.log('stymulacja','Tryb na żądanie 70/min');this.say(SAY.pace4+(s.pacing.cardio?' '+SAY.cardio:''));s.pacing.mA=30;this.ask('paceCap',SAY.paceCap,{prio:2})}}else return false;break;
  case 'paceCap':if(yes){s.pacing.capture=s.pacing.mA;s.pacing.mA+=10;this.log('stymulacja','Wychwyt przy '+s.pacing.capture+' mA, ustawione '+s.pacing.mA+' mA');this.say(SAY.paceOk);this.ask('pacePulse',SAY.pacePulse,{prio:2})}
-  else if(no||c==='up'){if(s.pacing.mA>=this.paceMax){this.log('stymulacja','Brak wychwytu przy '+this.paceMax+' mA');this.say(SAY.paceMax)}else{s.pacing.mA+=10;this.log('stymulacja','Prąd '+s.pacing.mA+' mA');this.say(paceUp(s.pacing.mA));this.ask('paceCap',SAY.paceCap,{prio:2})}}else return false;break;
- case 'paceConsc':if(yes){this.log('sedacja','Pacjent przytomny – analgezja/sedacja (DO WERYFIKACJI)');s.sed={fent:0,mida:0};this.say(SAY.paceSed+' '+SAY.paceMon);this.ask('fentGo',SAY.fentGo,{prio:1,def:'skip',tries:2});this.ask('midaGo',SAY.midaGo,{prio:1,def:'skip',tries:2})}else if(no||def){this.say(SAY.paceNoSed)}else return false;break;
+  else if(no||c==='up'){if(s.pacing.mA>=this.paceMax){this.log('stymulacja','Brak wychwytu przy '+this.paceMax+' mA – kardiolog');this.alarm('pace');this.say(SAY.paceMax,'alarm');if(!s.binf&&!this.has('bradyDrug'))this.ask('bradyDrug',SAY.bradyDrug,{prio:1,def:'iso',tries:2})}else{if(!s.pacing.analg){s.pacing.analg=true;this.say(SAY.paceAnalg)}s.pacing.mA+=10;this.log('stymulacja','Prąd '+s.pacing.mA+' mA');this.say(paceUp(s.pacing.mA));this.ask('paceCap',SAY.paceCap,{prio:2})}}else return false;break;
+ case 'paceConsc':if(yes){this.log('sedacja','Pacjent przytomny – analgezja/sedacja (DO WERYFIKACJI)');s.sed={fent:0,mida:0};s.fentConc=this.fentConc;s.midaConc=this.midaConc;this.say(sedText(this)+' '+SAY.paceMon);this.ask('fentGo',SAY.fentGo,{prio:1,def:'skip',tries:2});this.ask('midaGo',SAY.midaGo,{prio:1,def:'skip',tries:2})}else if(no||def){this.say(SAY.paceNoSed)}else return false;break;
  case 'fentGo':case 'fentRep':case 'midaGo':case 'midaRep':{const f=q.id.startsWith('fent');if(no&&q.id.endsWith('Rep'))break;if(def&&q.id.endsWith('Go')){f?s.sedFentT=this.now()+4*60*MS:s.sedMidaT=this.now()+150*MS;break}if(def)break;
-  let ml=r.num!=null&&r.num>0&&r.num<=5?r.num:(yes?(f?.5:1):null);if(ml==null)return false;this.giveSed(f,ml);break}
+  let ml=r.num!=null&&r.num>0&&r.num<=10?r.num:(yes?(f?25/this.fentConc:1/this.midaConc):null);if(ml==null)return false;this.giveSed(f,ml);break}
  case 'pacePulse':if(yes||c==='pulse'){this.log('stymulacja','Tętno obecne – stymulacja skuteczna');this.ask('paceConsc',SAY.paceConsc,{prio:2,def:'no',tries:1})}else if(no||c==='nopulse'){this.log('NZK','PEA przy stymulacji');this.say(SAY.pacePEA);s.mode='rosc';this.toArrest(true)}else return false;break;
  default:if(!def)return false}
  return true};
+P.titratable=function(){const s=this.s,a=[];if(s.nora)a.push('nora');if(s.dobu)a.push('dobu');if(s.binf)a.push('binf');return a};
+P.titrate=function(k,cmd){const s=this.s;if(k==='nora'){cmd==='up'?this.noraUp():this.say(SAY.keepPump+' '+flowPhrase(s.nora.mlh)+'.')}
+ else if(k==='dobu'){cmd==='up'?this.dobuUp():this.say(SAY.keepPump+' '+flowPhrase(s.dobu.mlh)+'.')}
+ else{cmd==='up'?this.binfUp(false):this.say(SAY.keepPump+' '+flowPhrase(s.binf.mlh)+'.')}};
+P.dobuUp=function(){const s=this.s;if(s.dobu.dose>=20-1e-9){this.alarm('dobu');this.say(SAY.dobuMax,'alarm');this.log('alarm','Dobutamina 20 µg/kg/min');return}
+ s.dobu.dose=Math.min(20,s.dobu.dose+2.5);s.dobu.mlh=dobuMlh(s.dobu.dose,s.kg);this.log('lek','Dobutamina ↑ '+fmt1(s.dobu.mlh)+' ml/h = '+fmt1(s.dobu.dose)+' µg/kg/min',{drug:'dobutamina',dose:fmt1(s.dobu.dose)+' µg/kg/min',mlh:s.dobu.mlh});this.say(SAY.upPump+' '+flowPhrase(s.dobu.mlh)+'.');
+ if(s.dobu.dose>=20-1e-9){this.alarm('dobu');this.say(SAY.dobuMax,'alarm')}};
+P.noraDown=function(){const s=this.s;if(s.nora.dose<=.05+1e-9){this.say(SAY.noraLow);return}s.nora.dose=Math.round((s.nora.dose-.05)*100)/100;s.nora.mlh=noraMlh(s.nora.dose,s.kg,s.syr);
+ this.log('lek','Noradrenalina ↓ '+fmt1(s.nora.mlh)+' ml/h = '+String(s.nora.dose).replace('.',',')+' µg/kg/min',{drug:'noradrenalina',dose:String(s.nora.dose).replace('.',',')+' µg/kg/min',mlh:s.nora.mlh});this.say(SAY.downPump+' '+flowPhrase(s.nora.mlh)+'.')};
+const HEPR={pe:18,acs:12};
+P.startInf=function(k,ind){const s=this.s;if(k==='hep'&&!s.kg){s.infPending=[k,ind];this.ask('weight',SAY.weight,{prio:2});return}s.infPending=null;s.infs=s.infs||{};
+ if(k==='hep'){const conc=this.hep.u/this.hep.ml,rate=HEPR[ind]*s.kg,mlh=r1(rate/conc);s.infs.hep={ind,mlh,rate};
+  this.log('lek','Heparyna niefrakcjonowana '+this.hep.u+' j./'+this.hep.ml+' ml: '+fmt1(mlh)+' ml/h = '+HEPR[ind]+' j./kg/h ('+(ind==='pe'?'zatorowość płucna':'OZW')+') – DO WERYFIKACJI',{drug:'heparyna wlew',dose:HEPR[ind]+' j./kg/h',mlh});
+  this.say('Heparyna: '+this.hep.u+' jednostek dociągnij solą fizjologiczną do '+this.hep.ml+' mililitrów. '+SAY.setPump+' '+flowPhrase(mlh)+'.');this.ask('infGo','Powiedz: podano, gdy pompa ruszy.',{def:'skip',tries:2,prio:1,data:'Heparyna'})}
+ else{const mlh=r1(this.amioInf.ml/24);s.infs.amio={mlh};this.log('lek','Amiodaron wlew '+this.amioInf.mg+' mg/'+this.amioInf.ml+' ml na 24 h: '+fmt1(mlh)+' ml/h – DO WERYFIKACJI',{drug:'amiodaron wlew',dose:this.amioInf.mg+' mg/24 h',mlh});
+  this.say('Amiodaron: '+this.amioInf.mg+' miligramów dociągnij glukozą 5 procent do '+this.amioInf.ml+' mililitrów. '+SAY.setPump+' '+flowPhrase(mlh)+'.');this.ask('infGo','Powiedz: podano, gdy pompa ruszy.',{def:'skip',tries:2,prio:1,data:'Amiodaron'})}};
+P.setKg=function(kg){const s=this.s;s.kg=kg;s.kgAssumed=false;this.log('masa','Korekta masy ciała: '+kg+' kg');this.say(SAY.logged+' '+kg+' kilogramów.','ack');
+ if(s.nora){s.nora.mlh=noraMlh(s.nora.dose,kg,s.syr);this.say('Noradrenalina. '+SAY.setPump+' '+flowPhrase(s.nora.mlh)+'.')}
+ if(s.dobu){s.dobu.mlh=dobuMlh(s.dobu.dose,kg);this.say('Dobutamina. '+SAY.setPump+' '+flowPhrase(s.dobu.mlh)+'.')}
+ if(s.binf&&BINF[s.binf.d].unit==='kgmin'){s.binf.mlh=binfMlh(s.binf.d,s.binf.dose,kg,this.conc);this.say('Dopamina. '+SAY.setPump+' '+flowPhrase(s.binf.mlh)+'.')}};
 P.startBrady=function(){this.log('bradykardia','Bradykardia – ścieżka ERC 2025');this.ask('bradySigns',SAY.bradySigns,{prio:2,def:'yes',tries:2})};
-P.startBinf=function(d){const s=this.s;if(BINF[d].unit==='kgmin'&&!s.kg){s.binfPending=d;this.ask('weight',SAY.weight,{prio:2,def:70,tries:2});return}s.binfPending=null;
+P.startBinf=function(d){const s=this.s;if(BINF[d].unit==='kgmin'&&!s.kg){s.binfPending=d;this.ask('weight',SAY.weight,{prio:2});return}s.binfPending=null;
  const c=binfConc(d,this.conc),dose=c.start,mlh=binfMlh(d,dose,s.kg,this.conc);s.binf={d,dose,mlh};
  this.log('lek',c.name+' '+c.mg+' mg/'+c.ml+' ml: '+fmt1(mlh)+' ml/h = '+String(dose).replace('.',',')+(c.unit==='kgmin'?' µg/kg/min':' µg/min'),{drug:c.name,dose:String(dose).replace('.',',')+(c.unit==='kgmin'?' µg/kg/min':' µg/min'),mlh});
  this.say(binfPrep(d,this.conc,this.sayConc)+' '+SAY.setPump+' '+flowPhrase(mlh)+'.');this.ask('binfGo','Powiedz: podano, gdy pompa ruszy.',{def:'skip',tries:2,prio:1});s.bphase='binf'};
 P.bDecide=function(){const s=this.s,a=s.bAss||{};const ok=a.hr!=null&&a.hr>60&&a.sbp!=null&&a.sbp>90&&a.res;
  if(ok){if(s.bphase==='binf'&&s.binf){this.say(SAY.keepPump+' '+flowPhrase(s.binf.mlh)+'.');s.bNext=this.now()+BINT[s.binf.d]}else{this.say(SAY.bKeepAtro);s.bNext=this.now()+3*60*MS}return}
- if(s.bphase==='binf'&&s.binf)this.binfUp(true);else if(s.atropine<3){s.bNext=null;this.ask('atro',atroNext(this.atroAmp),{prio:2})}};
+ if(s.bphase==='binf'&&s.binf)this.binfUp(true);else if(s.atropine<3-1e-9){s.bNext=null;this.ask('atro',atroNext(this.atroDose,this.atroAmp),{prio:2})}};
 P.binfSet=function(mlh,dose){const s=this.s,b=s.binf,c=binfConc(b.d,this.conc);b.mlh=r1(mlh);b.dose=dose!=null?dose:Math.round(b.mlh*c.conc/60*100)/100;
  const u=c.unit==='kgmin'?' µg/kg/min':' µg/min';this.log('lek',c.name+' ↑ '+fmt1(b.mlh)+' ml/h = '+String(b.dose).replace('.',',')+u,{drug:c.name,dose:String(b.dose).replace('.',',')+u,mlh:b.mlh});this.say(SAY.upPump+' '+flowPhrase(b.mlh)+'.')};
 P.binfUp=function(auto){const s=this.s,b=s.binf;s.bNext=this.now()+BINT[b.d];
  if(b.d==='iso'){if(auto&&b.mlh>=20){this.say(SAY.isoCap);return}if(b.mlh>=60){this.alarm('binf');this.say(SAY.adrMax,'alarm');if(!s.pacing){this.startPacing();s.pacing.cardio=true}return}this.binfSet(Math.min(b.mlh+3,auto?20:60));if(auto&&b.mlh>=20)this.say(SAY.isoCap);return}
  if(b.d==='adrinf'){if(b.mlh>=30){this.alarm('binf');this.say(SAY.adrMax,'alarm');this.log('alarm','Wlew adrenaliny na maksimum');if(!s.pacing){this.startPacing();s.pacing.cardio=true}return}this.binfSet(Math.min(b.mlh+3,30));return}
  if(b.d==='dopa'){if(b.dose>=10){this.say(SAY.dopaMax);this.log('bradykardia','Dopamina max – zmiana na wlew adrenaliny');this.startBinf('adrinf');return}const d=Math.min(10,b.dose+2);this.binfSet(binfMlh('dopa',d,s.kg,this.conc),d)}};
-P.giveSed=function(f,ml){const s=this.s,d=s.sed||(s.sed={fent:0,mida:0});if(f){d.fent=r1(d.fent+ml);this.log('lek','Fentanyl '+fmt1(ml)+' ml = '+Math.round(ml*this.fentConc)+' µg (łącznie '+fmt1(d.fent)+' ml = '+Math.round(d.fent*this.fentConc)+' µg)',{drug:'fentanyl',dose:Math.round(ml*this.fentConc)+' µg'});this.say(SAY.logged+' fentanyl.','ack');s.sedFentT=this.now()+4*60*MS}
- else{const ok=Math.min(ml,r1(5-d.mida));d.mida=r1(d.mida+ok);this.log('lek','Midazolam '+fmt1(ok)+' ml = '+fmt1(ok*this.midaConc)+' mg (łącznie '+fmt1(d.mida)+' ml = '+fmt1(d.mida*this.midaConc)+' mg)',{drug:'midazolam',dose:fmt1(ok*this.midaConc)+' mg'});
-  if(d.mida>=5-1e-9){s.sedMidaT=null;this.say(SAY.midaMax)}else{this.say(SAY.logged+' midazolam.','ack');s.sedMidaT=this.now()+150*MS}}};
+P.giveSed=function(f,ml){const s=this.s,d=s.sed||(s.sed={fent:0,mida:0});
+ if(f){const was=d.fent*this.fentConc;d.fent=r1(d.fent+ml);const ug=Math.round(d.fent*this.fentConc);this.log('lek','Fentanyl '+fmt1(ml)+' ml = '+Math.round(ml*this.fentConc)+' µg (łącznie '+fmt1(d.fent)+' ml = '+ug+' µg)',{drug:'fentanyl',dose:Math.round(ml*this.fentConc)+' µg'});this.say(SAY.logged+' fentanyl.','ack');s.sedFentT=this.now()+4*60*MS;
+  if(ug>100&&was<=100){this.alarm('fent');this.say(fentWarn(this),'alarm');this.log('alarm','Fentanyl łącznie >100 µg')}}
+ else{const maxMl=5/this.midaConc;const ok=Math.max(0,Math.min(ml,r1(maxMl-d.mida)));d.mida=r1(d.mida+ok);this.log('lek','Midazolam '+fmt1(ok)+' ml = '+fmt1(ok*this.midaConc)+' mg (łącznie '+fmt1(d.mida)+' ml = '+fmt1(d.mida*this.midaConc)+' mg)',{drug:'midazolam',dose:fmt1(ok*this.midaConc)+' mg'});
+  if(d.mida*this.midaConc>=5-1e-9){s.sedMidaT=null;this.say(SAY.midaMax)}else{this.say(SAY.logged+' midazolam.','ack');s.sedMidaT=this.now()+150*MS}}};
 P.startPacing=function(){const s=this.s;s.pacing={mA:null,capture:null,el:this.paceEl,t:this.now()};this.log('stymulacja','Stymulacja przezskórna – elektrody '+(this.paceEl==='al'?'przednio-boczne':'przednio-tylne'));
  this.ask('pace1',this.paceEl==='al'?SAY.pace1al:SAY.pace1ap,{prio:2,def:'go',tries:Infinity})};
-P.htTreat=function(i){const n=HT[i][0];if(n==='hiperkaliemia'){this.ask('calcium',SAY.calcium);this.ask('bicarbQ',SAY.bicarbQ,{def:'no',tries:1})}
- if(n==='zakrzepica')this.ask('lysis',SAY.lysis);if(n==='toksyny')this.ask('ccb','Czy zatrucie blokerami kanału wapniowego?',{def:'no',tries:1});
+P.htTreat=function(i){const n=HT[i][0];if(n==='hiperkaliemia'){this.ask('calcium',SAY.calcium);this.ask('insulin',SAY.insulin);this.ask('bicarbQ',SAY.bicarbQ,{def:'no',tries:1})}
+ if(n==='hipoglikemia')this.ask('glucose',SAY.glucose);if(n==='hipomagnezemia')this.ask('mag',SAY.mag);
+ if(n==='zatorowość płucna')this.ask('lysis',SAY.lysis);if(n==='zawał')this.log('4H4T','Zawał – PCI do rozważenia');if(n==='toksyny')this.ask('ccb','Czy zatrucie blokerami kanału wapniowego?',{def:'no',tries:1});
  if(this.s.sim&&this.s.simCause===n)this.s.simTreated=true};
 // wejście z mowy/przycisku
 P.input=function(alts){const s=this.s;const r=interpret(alts);s.heard=r.text;
@@ -310,14 +372,18 @@ P.input=function(alts){const s=this.s;const r=interpret(alts);s.heard=r.text;
  switch(r.cmd){
  case 'replay':this.replay();return r.cmd;
  case 'pace':if(s.mode==='arrest'){s.cprPace=true;this.log('stymulacja','RKO ze stymulacją (asystolia z załamkami P / blok całkowity) – DO WERYFIKACJI');this.say(SAY.cprPace+', '+this.paceMax+' miliamperów. '+SAY.cprPace2);return r.cmd}this.startPacing();return r.cmd;
- case 'adrinf':if(!(s.cur&&s.cur.id==='bradyDrug')){this.ask('adrinfQ',SAY.adrinfQ,{prio:2,def:'no',tries:1});return r.cmd}break;
+ case 'adrinf':if(s.mode==='arrest'){this.say(SAY.adrinfArrest);return r.cmd}if(!(s.cur&&s.cur.id==='bradyDrug')){this.ask('adrinfQ',SAY.adrinfQ,{prio:2,def:'no',tries:1});return r.cmd}break;
+ case 'hepinf':if(s.mode!=='arrest'){this.ask('hepQ',SAY.hepQ,{prio:1});return r.cmd}break;
+ case 'amioinf':if(s.mode!=='arrest'){this.startInf('amio');return r.cmd}break;
+ case 'kg':if(r.num!=null&&!(s.cur&&s.cur.id==='weight')&&r.num>=20&&r.num<=250){this.setKg(r.num);return r.cmd}break;
+ case 'down':if(s.nora&&s.mode!=='arrest'){this.noraDown();return r.cmd}break;
  case 'alone':s.aloneT=this.now();this.log('ucisk','Brak drugiej osoby do ucisku – instrukcja, licznik przerwy 5 s');this.say(SAY.alone,'ack');return r.cmd;
  case 'pause':s.paused=true;this.say(SAY.paused);return r.cmd;
  case 'end':s.endAsk=true;this.ask('endQ',SAY.endQ,{prio:3,def:'cancel',tries:2});return r.cmd;
  case 'zakoncz_tak':this.finish();return r.cmd;
  case 'send':return 'send';
- case 'usg':this.log('POCUS','USG przy łóżku');this.say(SAY.usg,'ack');return r.cmd;
- case 'intub':if(!(s.cur&&s.cur.id==='intubQ')){s.intub=this.now();s.airway='intubacja (wideolaryngoskop)';this.drop('intubQ');this.log('drogi oddechowe','Intubacja – potwierdzić kapnografią');this.say(SAY.intubDone);return r.cmd}break;
+ case 'usg':this.log('POCUS','USG przy łóżku');this.say(SAY.usg,'ack');this.ask('usgRes',SAY.usgRes,{def:'skip',tries:1});return r.cmd;
+ case 'intub':if(!(s.cur&&s.cur.id==='intubQ')){s.intub=this.now();s.airway='intubacja (wideolaryngoskop)';this.drop('intubQ');this.log('drogi oddechowe','Intubacja – potwierdzić kapnografią');this.say(SAY.intubDone);this.ask('tube',SAY.tube,{def:'skip',tries:1});return r.cmd}break;
  case 'rosc':if(s.mode!=='rosc'){this.toRosc();return r.cmd}break;
  case 'arrest':if(s.mode==='rosc'){this.toArrest();return r.cmd}break;
  case 'shock_done':if(!(s.cur&&s.cur.id==='shock')&&s.mode==='arrest'){this.shockDone();return r.cmd}break;
@@ -326,7 +392,7 @@ P.input=function(alts){const s=this.s;const r=interpret(alts);s.heard=r.text;
  case 'bicarb':this.ask('bicarbQ',SAY.bicarbQ,{prio:1,def:'no',tries:1});return r.cmd;
  case 'brady':if(s.mode==='arrest'&&!(s.cur&&s.cur.id==='rhythm')){this.onRhythmCmd('brady');return r.cmd}if(s.mode!=='arrest'){this.startBrady();return r.cmd}break;
  case 'change':if(s.sim){this.simForce();return r.cmd}break;
- case 'up':case 'keep':if(s.binf&&(!s.nora||s.binf.t0>0)&&!(s.cur&&['sys','dia','bSym','paceCap'].includes(s.cur.id))){r.cmd==='up'?this.binfUp(false):this.say(SAY.keepPump+' '+flowPhrase(s.binf.mlh)+'.');return r.cmd}if(s.nora&&!(s.cur&&['sys','dia'].includes(s.cur.id))){r.cmd==='up'?this.noraUp():this.say(SAY.keepPump+' '+flowPhrase(s.nora.mlh)+'.');return r.cmd}break;
+ case 'up':case 'keep':{if(s.cur&&['sys','dia','bSym','paceCap','which'].includes(s.cur.id))break;const act=this.titratable();if(!act.length)break;if(act.length>1){this.ask('which',SAY.which,{prio:2,data:r.cmd});return r.cmd}this.titrate(act[0],r.cmd);return r.cmd}
  case 'shockable':case 'nonshock':case 'nopulse':case 'organised':case 'pulse':if(s.mode==='arrest'&&!(s.cur&&['rhythm','pulse','shock'].includes(s.cur.id))){if(!s.offStart)s.offStart=this.now();this.onRhythmCmd(r.cmd);return r.cmd}break;
  }
  if(s.paused&&(r.cmd==='next'||r.cmd==='yes')){s.paused=false;this.say(SAY.resumed);this.pump();return 'resume'}
@@ -335,36 +401,36 @@ P.input=function(alts){const s=this.s;const r=interpret(alts);s.heard=r.text;
  if(ok){if(s.cur===c)s.cur=null;this.pump()}else{c.at=this.now();this.say(SAY.notUnd+' '+c.text,'ask')}
  return r.cmd};
 P.replay=function(){const s=this.s;const t=s.cur?s.cur.text:s.last;if(t)this.out(t,'replay');else this.out(SAY.nothing,'replay')};
-P.toRosc=function(){const s=this.s,now=this.now();s.mode='rosc';s.rosc.push(now);s.q=s.q.filter(q=>['weight','syr','spo2','ekg','stemi','temp'].includes(q.id));s.cur=null;
+P.toRosc=function(){const s=this.s,now=this.now();s.mode='rosc';s.rosc.push(now);s.q=s.q.filter(q=>['weight','syr','spo2','ekg','stemi','temp','glu','gcs','tube','usgRes'].includes(q.id));s.cur=null;
  this.log('ROSC','Powrót spontanicznego krążenia');this.say(SAY.rosc);this.ask('sys',SAY.sys,{prio:0});
- if(!s.post.spo2)this.ask('spo2',SAY.spo2,{def:'skip',tries:2});if(!s.post.ekg)this.ask('ekg',SAY.ekg,{def:'skip',tries:2});if(!s.post.temp)this.ask('temp',SAY.temp,{def:'skip',tries:2})};
-P.toArrest=function(quiet){const s=this.s;s.mode='arrest';s.q=[];s.cur=null;s.nextMap=null;this.log('NZK','Ponowne zatrzymanie krążenia');s.cycleT=this.now();s.warned=false;if(!quiet)this.say(SAY.rearrest);
- if(!s.adrDue||s.adrDue<this.now())s.adrDue=this.now()};
+ if(!s.post.spo2)this.ask('spo2',SAY.spo2,{def:'skip',tries:2});if(!s.post.ekg)this.ask('ekg',SAY.ekg,{def:'skip',tries:2});if(!s.post.temp)this.ask('temp',SAY.temp,{def:'skip',tries:2});if(s.post.glu==null)this.ask('glu',SAY.glu,{def:'skip',tries:2});if(s.post.gcs==null)this.ask('gcs',SAY.gcs,{def:'skip',tries:2})};
+P.toArrest=function(quiet){const s=this.s;s.mode='arrest';s.q=[];s.cur=null;s.nextMap=null;s.bNext=null;s.sedFentT=null;s.sedMidaT=null;s.epShocks=0;s.adrHold=true;s.rhythm='?';this.log('NZK','Ponowne zatrzymanie krążenia');s.cycleT=this.now();s.warned=false;if(!quiet)this.say(SAY.rearrest);
+ s.offStart=this.now();this.ask('rhythm',SAY.rhythm,{prio:2})};
 // pętla MAP (stała, co 5 min)
 P.onMap=function(m,sy,di){const s=this.s;s.lastMap=m;this.log('ciśnienie',sy+'/'+di+' mmHg, MAP '+m,{map:m});s.nextMap=this.now()+MAPI;
  const pre=SAY.mapIs+' '+m+'.';
  if(m<65){if(!s.nora){this.say(pre);this.startNora()}else{this.say(pre);this.noraUp()}}
- else{if(s.nora){this.say(pre+' '+SAY.keepPump+' '+flowPhrase(s.nora.mlh)+'.')}else this.say(pre);
+ else{if(s.nora&&m>=this.mapHigh&&s.nora.dose>.05+1e-9){this.say(pre);this.noraDown()}else if(s.nora){this.say(pre+' '+SAY.keepPump+' '+flowPhrase(s.nora.mlh)+'.')}else this.say(pre);
   if(!s.dobu&&!s.dobuAsked)this.ask('lowOut',SAY.lowOut,{def:'no',tries:1})}};
 P.startNora=function(){const s=this.s;s.noraPending=true;this.contNora()};
-P.contNora=function(){const s=this.s;if(s.noraPending){if(!s.kg){this.ask('weight',SAY.weight,{prio:1,def:70,tries:2});return}
+P.contNora=function(){const s=this.s;if(s.noraPending){if(!s.kg){this.ask('weight',SAY.weight,{prio:1});return}
  if(!s.syr){this.ask('syr',SAY.syr,{prio:1,def:50,tries:1});return}
  s.noraPending=false;const dose=.05,mlh=noraMlh(dose,s.kg,s.syr);s.nora={dose,mlh};
  this.log('lek','Noradrenalina '+NORA[s.syr].mg+' mg/'+NORA[s.syr].ml+' ml: '+fmt1(mlh)+' ml/h = 0,05 µg/kg/min',{drug:'noradrenalina',dose:'0,05 µg/kg/min',mlh});
  this.say((s.syr===20?SAY.noraPrep20:SAY.noraPrep50)+' '+SAY.setPump+' '+flowPhrase(mlh)+'.');this.ask('noraGo','Powiedz: podano, gdy pompa ruszy.',{def:'skip',tries:2,prio:1})}
- if(s.dobuPending){if(!s.kg){this.ask('weight',SAY.weight,{prio:1,def:70,tries:2});return}this.startDobu()}};
+ if(s.dobuPending){if(!s.kg){this.ask('weight',SAY.weight,{prio:1});return}this.startDobu()}};
 P.noraUp=function(){const s=this.s;const d=r1(s.nora.dose*100+5)/100;s.nora.dose=Math.round(d*100)/100;s.nora.mlh=noraMlh(s.nora.dose,s.kg,s.syr);
  this.log('lek','Noradrenalina ↑ '+fmt1(s.nora.mlh)+' ml/h = '+String(s.nora.dose).replace('.',',')+' µg/kg/min',{drug:'noradrenalina',dose:String(s.nora.dose).replace('.',',')+' µg/kg/min',mlh:s.nora.mlh});
  this.say(SAY.upPump+' '+flowPhrase(s.nora.mlh)+'.');
  if(s.nora.dose>=.3-1e-9){this.alarm('nora');this.say(SAY.noraHigh,'alarm');this.log('alarm','Noradrenalina ≥0,3 µg/kg/min – wezwać anestezjologa')}};
-P.startDobu=function(){const s=this.s;if(!s.kg){s.dobuPending=true;this.ask('weight',SAY.weight,{prio:1,def:70,tries:2});return}s.dobuPending=false;
+P.startDobu=function(){const s=this.s;if(!s.kg){s.dobuPending=true;this.ask('weight',SAY.weight,{prio:1});return}s.dobuPending=false;
  const mlh=dobuMlh(5,s.kg);s.dobu={dose:5,mlh};this.log('lek','Dobutamina 250 mg/50 ml: '+fmt1(mlh)+' ml/h = 5 µg/kg/min',{drug:'dobutamina',dose:'5 µg/kg/min',mlh});
  this.say(SAY.dobuPrep+' '+SAY.setPump+' '+flowPhrase(mlh)+'.');this.ask('dobuGo','Powiedz: podano, gdy pompa ruszy.',{def:'skip',tries:2,prio:1})};
 P.finish=function(){const s=this.s;if(s.mode==='ended')return;if(s.offStart){s.handsOff+=(this.now()-s.offStart)/MS;s.offStart=null}
  s.endPrevMode=s.mode;s.mode='ended';s.tEnd=this.now();s.q=[];s.cur=null;this.log('koniec','Zakończenie: '+(s.endPrevMode==='rosc'?'ROSC':'bez ROSC'));
  if(s.sim)s.summary=this.simSummary();this.say(SAY.ended+(s.sim?' '+s.summary.speech:''))};
 // ---------- symulacja ----------
-const SIMR=['VF','pVT','asystolia','PEA'],SIMC=['hiperkaliemia','zakrzepica','tamponada','hipowolemia','hipoksja','toksyny'];
+const SIMR=['VF','pVT','asystolia','PEA'],SIMC=['hiperkaliemia','zatorowość płucna','tamponada','hipowolemia','hipoksja','toksyny'];
 P.simInit=function(){const s=this.s,R=this.rand;s.simPt={age:25+Math.floor(R()*60),kg:50+Math.floor(R()*8)*10,scen:R()<.5?'SOR':'przywieziony'};
  s.simRhythm=SIMR[Math.floor(R()*4)];s.simCause=SIMC[Math.floor(R()*SIMC.length)];s.simTreated=false;s.simBP=null;
  s.kg=s.kg||s.simPt.kg;this.log('symulacja','Pacjent: '+s.simPt.age+' lat, '+s.simPt.kg+' kg, '+s.simPt.scen+', rytm '+s.simRhythm+', przyczyna: '+s.simCause)};
@@ -393,20 +459,20 @@ function report(s){const L=s.log||[],end=s.tEnd||Date.now();const dur=Math.round
  const sum=[['Tryb',s.sim?'SYMULACJA – nie do dokumentacji pacjenta':'Rzeczywisty'],['Scenariusz',s.scen||'SOR'],['Godzina NZK',hhmm(s.arrestT)],['Start prowadzenia',hhmm(s.t0)],
   ['ROSC',s.rosc.length?s.rosc.map(hhmm).join(', '):'nie'],['Zakończenie',s.tEnd?hhmm(s.tEnd):'w toku'],['Czas RKO',dur+' min'],
   ['Wyładowania',String(s.shocks)],['Adrenalina',s.adr.length+' × 1 mg'],['Amiodaron / lidokaina',s.amio+' / '+s.lido],
-  ['Przerwy w ucisku (szac.)',Math.round(s.handsOff)+' s łącznie, najdłuższa '+Math.round(s.maxOff)+' s'],['Drogi oddechowe',s.airway],
+  ['Przerwy w ucisku (szac.)',Math.round(s.handsOff)+' s łącznie, najdłuższa '+Math.round(s.maxOff)+' s'],['Drogi oddechowe',s.airway+(s.tube?', rurka nr '+fmt1(s.tube):'')],['POCUS',s.usgRes||'—'],
   ['EtCO₂',s.etco2.length?s.etco2.map(e=>e.v).join(', ')+' mmHg':'brak danych'],
   ['Noradrenalina',s.nora?fmt1(s.nora.mlh)+' ml/h ('+String(s.nora.dose).replace('.',',')+' µg/kg/min), '+NORA[s.syr].mg+' mg/'+NORA[s.syr].ml+' ml':'nie'],
-  ['Dobutamina',s.dobu?fmt1(s.dobu.mlh)+' ml/h (5 µg/kg/min), 250 mg/50 ml':'nie'],['Masa ciała',s.kg?s.kg+' kg':'—'],
-  ['Ostatnie ciśnienie średnie',s.lastMap!=null?s.lastMap+' mmHg':'—'],['SpO₂',s.post.spo2!=null?s.post.spo2+'%':'—'],['EKG 12-odpr. / STEMI',(s.post.ekg||'—')+' / '+(s.post.stemi||'—')],['Bradykardia – leki',s.atropine?'atropina '+s.atropine+' mg':'—'],['Wlew w bradykardii',s.binf?BINF[s.binf.d].name+' '+fmt1(s.binf.mlh)+' ml/h ('+String(s.binf.dose).replace('.',',')+(BINF[s.binf.d].unit==='kgmin'?' µg/kg/min':' µg/min')+')':'nie'],['Stymulacja przezskórna',s.cprPace&&!s.pacing?'w trakcie RKO (załamki P bez QRS), prąd maksymalny, 70/min':s.pacing?(s.pacing.capture?'wychwyt '+s.pacing.capture+' mA, ustawione '+s.pacing.mA+' mA, 70/min':'bez wychwytu ('+(s.pacing.mA||'—')+' mA)')+', elektrody '+(s.pacing.el==='al'?'przednio-boczne':'przednio-tylne'):'nie'],['Analgosedacja',s.sed?'fentanyl '+fmt1(s.sed.fent)+' ml ('+Math.round(s.sed.fent*50)+' µg), midazolam '+fmt1(s.sed.mida)+' ml':'nie'],['Temperatura',s.post.temp!=null?s.post.temp+' °C':'—']];
+  ['Dobutamina',s.dobu?fmt1(s.dobu.mlh)+' ml/h ('+fmt1(s.dobu.dose)+' µg/kg/min), 250 mg/50 ml':'nie'],['Masa ciała',s.kg?s.kg+' kg':'—'],
+  ['Ostatnie ciśnienie średnie',s.lastMap!=null?s.lastMap+' mmHg':'—'],['SpO₂',s.post.spo2!=null?s.post.spo2+'%':'—'],['EKG 12-odpr. / STEMI',(s.post.ekg||'—')+' / '+(s.post.stemi||'—')],['Bradykardia – leki',s.atropine?'atropina '+fmt1(s.atropine)+' mg ('+(s.atroN||0)+' dawek)':'—'],['Wlew w bradykardii',s.binf?BINF[s.binf.d].name+' '+fmt1(s.binf.mlh)+' ml/h ('+String(s.binf.dose).replace('.',',')+(BINF[s.binf.d].unit==='kgmin'?' µg/kg/min':' µg/min')+')':'nie'],['Stymulacja przezskórna',s.cprPace&&!s.pacing?'w trakcie RKO (załamki P bez QRS), prąd maksymalny, 70/min':s.pacing?(s.pacing.capture?'wychwyt '+s.pacing.capture+' mA, ustawione '+s.pacing.mA+' mA, 70/min':'bez wychwytu ('+(s.pacing.mA||'—')+' mA)')+', elektrody '+(s.pacing.el==='al'?'przednio-boczne':'przednio-tylne'):'nie'],['Analgosedacja',s.sed?'fentanyl '+fmt1(s.sed.fent)+' ml ('+Math.round(s.sed.fent*(s.fentConc||50))+' µg, '+(s.fentConc||50)+' µg/ml), midazolam '+fmt1(s.sed.mida)+' ml ('+fmt1(s.sed.mida*(s.midaConc||1))+' mg, '+fmt1(s.midaConc||1)+' mg/ml)':'nie'],['Temperatura',s.post.temp!=null?s.post.temp+' °C':'—'],['Glikemia',s.post.glu!=null?s.post.glu+' mg/dl':'—'],['GCS',s.post.gcs!=null?String(s.post.gcs):'—'],['Masa ciała – źródło',s.kgAssumed?'PRZYJĘTA 70 kg (nieznana)':s.kg?'podana':'—'],['Heparyna wlew',s.infs&&s.infs.hep?fmt1(s.infs.hep.mlh)+' ml/h ('+HEPR[s.infs.hep.ind]+' j./kg/h)':'nie'],['Amiodaron wlew',s.infs&&s.infs.amio?fmt1(s.infs.amio.mlh)+' ml/h (900 mg/24 h)':'nie']];
  const ht=HT.map(h=>[h[0],s.ht[h[0]]||'–']);
  return {sum,drugs,ht,timeline:L.map(e=>[hhmm(e.t),e.type,e.txt]),missing:sum.filter(x=>x[1]==='—').map(x=>x[0])}}
 // lista wszystkich stałych komunikatów (do generowania nagrań)
 function staticPhrases(){const a=new Set(Object.values(SAY).filter(Boolean));HT.forEach((h,i)=>{a.add(h[1]);a.add(htQ(i))});
  ['Podaj','Powiedz: podano, gdy pompa ruszy.','Czy zatrucie blokerami kanału wapniowego?','Symulacja: na monitorze rytm zatokowy, wyczuwalne tętno.'].forEach(x=>a.add(x));
- Object.keys(ENERGY).forEach(e=>{a.add(vfInstr(e));a.add(vfInstr(e,1));a.add(vfInstr(e,2))});
- for(let m=40;m<=200;m+=10)a.add(paceUp(m));[140,200].forEach(m=>a.add(SAY.cprPace+', '+m+' miliamperów.'));a.add(atroText(1));a.add(atroText(.5));a.add(atroNext(1));a.add(atroNext(.5));['iso','dopa','adrinf'].forEach(d=>{a.add(binfPrep(d));a.add(binfPrep(d,{},false))});
+ Object.keys(ENERGY).concat(Object.keys(ENERGY_SEQ)).forEach(e=>{a.add(vfInstr(e));a.add(vfInstr(e,1));a.add(vfInstr(e,2))});
+ for(let m=40;m<=200;m+=10)a.add(paceUp(m));[140,200].forEach(m=>a.add(SAY.cprPace+', '+m+' miliamperów.'));for(const d of [.5,1])for(const am of [.5,1]){a.add(atroText(d,am));a.add(atroNext(d,am))}const dO={};a.add('Heparyna: 25000 jednostek dociągnij solą fizjologiczną do 50 mililitrów.');a.add('Amiodaron: 900 miligramów dociągnij glukozą 5 procent do 50 mililitrów.');['Noradrenalina.','Dobutamina.','Dopamina.','Zapisano: insulina z glukozą.','Zapisano: glukoza.','Zapisano: fentanyl.','Zapisano: midazolam.'].forEach(x=>a.add(x));a.add(sedText(dO));a.add(fentRepText(dO));a.add(midaRepText(dO));a.add(fentWarn(dO));['iso','dopa','adrinf'].forEach(d=>{a.add(binfPrep(d));a.add(binfPrep(d,{},false))});
  SIMR.forEach(r=>{a.add('Symulacja: na monitorze '+r+'.');a.add('Symulacja: zmiana rytmu. Na monitorze '+r+'.')});
  Object.values(SAY).forEach(t=>a.add(SAY.remind+' '+t));return [...a].filter(Boolean)}
-const API={PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
+const API={parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
 if(typeof module!=='undefined')module.exports=API;else root.RKO=API;
 })(this);

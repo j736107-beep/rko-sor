@@ -25,7 +25,7 @@
   <button data-c="intubacja">INTUBACJA</button><button data-c="USG">USG</button><button data-c="powtórz">POWTÓRZ</button>
   <button data-c="pauza">PAUZA</button><button data-c="dalej">DALEJ</button><button data-c="zakończ" class="n">ZAKOŃCZ</button>
  </div>
- <div class="fb2"><button data-c="tak, zakończ" class="n">TAK, ZAKOŃCZ</button><button data-c="wyślij na moją skrzynkę">WYŚLIJ</button><button data-c="potrzebny stymulator">STYMULACJA</button><button data-c="gotowe">GOTOWE</button><button data-c="bradykardia">BRADYKARDIA</button><button data-c="izoprenalina">IZOPRENALINA</button><button data-c="dopamina">DOPAMINA</button><button data-c="adrenalina wlew">ADRENALINA WLEW</button><button data-c="zmień rytm" id="chg" class="hide">ZMIEŃ RYTM</button></div>
+ <div class="fb2"><button data-c="tak, zakończ" class="n">TAK, ZAKOŃCZ</button><button data-c="wyślij na moją skrzynkę">WYŚLIJ</button><button data-c="potrzebny stymulator">STYMULACJA</button><button data-c="gotowe">GOTOWE</button><button data-c="bradykardia">BRADYKARDIA</button><button data-c="izoprenalina">IZOPRENALINA</button><button data-c="dopamina">DOPAMINA</button><button data-c="wlew adrenaliny">ADRENALINA WLEW</button><button data-c="zmniejsz">ZMNIEJSZ</button><button data-c="wlew heparyny">HEPARYNA WLEW</button><button data-c="wlew amiodaronu">AMIODARON WLEW</button><button data-c="nie wiem">NIE WIEM</button><button data-c="zmień rytm" id="chg" class="hide">ZMIEŃ RYTM</button></div>
 </section>
 <section id="report" class="scr">
  <div class="noprint row"><button id="back">← Start</button><button id="print">Drukuj A4</button><button id="docx">DOCX</button><button id="send" class="y">WYŚLIJ</button></div>
@@ -37,11 +37,16 @@
  <label>Strzykawka noradrenaliny<select id="syr"><option value="">pytaj przy starcie</option><option value="50">50 ml (4 mg / 50 ml)</option><option value="20">20 ml (2 mg / 20 ml) – DO WERYFIKACJI</option></select></label>
  <label>Stymulator – maks. prąd<select id="pacer"></select></label>
  <label>Stymulacja przezskórna – elektrody (DO WERYFIKACJI)<select id="paceEl"><option value="ap">przednio-tylne (preferowane ERC)</option><option value="al">przednio-boczne</option></select></label>
+ <label>Atropina – dawka<select id="atroDose"><option value="0.5">0,5 mg co 3–5 min, max 3 mg (ERC, domyślnie)</option><option value="1">1 mg (AHA), max 3 mg</option></select></label>
  <label>Atropina – ampułka (DO WERYFIKACJI)<select id="atroAmp"><option value="0.5">0,5 mg/ml</option><option value="1">1 mg/ml</option></select></label>
  <label>Izoprenalina: mg/ml strzykawki (DO WERYFIKACJI)<input id="iso" placeholder="1/50"></label>
  <label>Dopamina: mg/ml strzykawki (DO WERYFIKACJI)<input id="dopa" placeholder="200/50"></label>
  <label>Adrenalina we wlewie: mg/ml (DO WERYFIKACJI)<input id="adrinf" placeholder="1/50"></label>
  <label>Wlew adrenaliny: lektor mówi stężenie (jedyne miejsce z mikrogramami)<select id="sayConc"><option value="1">tak – „Stężenie 20 mikrogramów na mililitr”</option><option value="0">nie</option></select></label>
+<label>Midazolam – ampułka mg/ml (np. 5/1 = 5 mg w 1 ml)<input id="midaAmp"></label>
+ <label>Heparyna wlew: j./ml strzykawki (DO WERYFIKACJI)<input id="hep" placeholder="25000/50"></label>
+ <label>Amiodaron wlew na 24 h: mg/ml (DO WERYFIKACJI)<input id="amioInf" placeholder="900/50"></label>
+ <label>Wyładowania seryjne (3) w monitorowanym NZK<select id="stacked"><option value="0">nie</option><option value="1">tak – podpowiadaj</option></select></label>
  <label>Fentanyl – µg/ml w ampułce (DO WERYFIKACJI)<input id="fentConc" inputmode="decimal"></label>
  <label>Midazolam – mg/ml po rozcieńczeniu (DO WERYFIKACJI)<input id="midaConc" inputmode="decimal"></label>
  <button id="selftest">Test: głośnik, lektor, mikrofon, pamięć</button><pre id="stres"></pre>
