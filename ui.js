@@ -2,7 +2,7 @@
 (function(){
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const LS={get:(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const cfg=Object.assign({email:'',energy:'mindray',syr:'',paceEl:'ap',atroAmp:'0.5',iso:'1/50',dopa:'200/50',adrinf:'1/50',sayConc:'1',pacer:'mindray',fentConc:'50',midaConc:'1',midaAmp:'5/1',atroDose:'0.5',stacked:'0',amioMode:'drip',dropSet:'20',hep:'25000/50',hepAmp:'5000',amioInf:'900/50'},LS.get('rko_cfg',{}));
+const cfg=Object.assign({email:'',energy:'mindray',syr:'',paceEl:'ap',atroAmp:'0.5',iso:'1/50',dopa:'200/50',adrinf:'1/50',sayConc:'1',pacer:'mindray',fentConc:'50',midaConc:'1',midaAmp:'5/1',atroDose:'0.5',stacked:'0',barge:'min',amioMode:'drip',dropSet:'20',hep:'25000/50',hepAmp:'5000',amioInf:'900/50'},LS.get('rko_cfg',{}));
 let E=null,timer=null,wl=null,said=[];
 function show(id){$$('.scr').forEach(s=>s.classList.toggle('on',s.id===id));if(id==='reports')renderList();if(id==='help')renderHelp();window.scrollTo(0,0)}
 $$('[data-s]').forEach(b=>b.onclick=()=>show(b.dataset.s));
@@ -11,7 +11,7 @@ $('#ver').textContent=RKO.VERSION;
 for(const k in RKO.ENERGY_LABEL){const o=document.createElement('option');o.value=k;o.textContent=RKO.ENERGY_LABEL[k];$('#energy').appendChild(o)}
 $('#email').value=cfg.email;$('#energy').value=cfg.energy;$('#syr').value=cfg.syr;
 $('#paceEl').value=cfg.paceEl;for(const k in RKO.PACEMAX){const o=document.createElement('option');o.value=k;o.textContent=RKO.PACEMAX[k].label;$('#pacer').appendChild(o)}
-const KS=['atroAmp','iso','dopa','adrinf','sayConc','pacer','fentConc','midaConc','midaAmp','atroDose','stacked','hep','hepAmp','amioMode','dropSet'];KS.forEach(k=>$('#'+k).value=cfg[k]);['email','energy','syr','paceEl'].concat(KS).forEach(k=>$('#'+k).onchange=()=>{cfg[k]=$('#'+k).value.trim();LS.set('rko_cfg',cfg)});
+const KS=['atroAmp','iso','dopa','adrinf','sayConc','pacer','fentConc','midaConc','midaAmp','atroDose','stacked','hep','hepAmp','amioMode','dropSet','barge'];KS.forEach(k=>$('#'+k).value=cfg[k]);['email','energy','syr','paceEl'].concat(KS).forEach(k=>$('#'+k).onchange=()=>{cfg[k]=$('#'+k).value.trim();LS.set('rko_cfg',cfg)});
 function net(){$('#net').textContent=navigator.onLine?'☁ sieć dostępna':'✈ offline';if(navigator.onLine)flushQueue(true)}
 addEventListener('online',net);addEventListener('offline',net);net();
 // ---- start ----
@@ -19,14 +19,17 @@ async function wake(on){const K=plug('KeepAwake');try{if(K){on?await K.keepAwake
  if(on&&navigator.wakeLock)wl=await navigator.wakeLock.request('screen');if(!on&&wl){wl.release();wl=null}}catch(e){}}
 function concCfg(){const o={};for(const k of ['iso','dopa','adrinf']){const m=String(cfg[k]).split('/').map(Number);if(m.length===2&&m[0]>0&&m[1]>0)o[k]={mg:m[0],ml:m[1]}}return o}
 function engine(){return new RKO.Engine({energy:cfg.energy,paceEl:cfg.paceEl,fentConc:+String(cfg.fentConc).replace(',','.')||50,midaConc:+String(cfg.midaConc).replace(',','.')||1,midaAmpMg:+cfg.midaAmp.split('/')[0]||5,midaAmpMl:+cfg.midaAmp.split('/')[1]||1,atroDose:+cfg.atroDose,stacked:cfg.stacked==='1',amioMode:cfg.amioMode,dropSet:+cfg.dropSet,hepAmp:+String(cfg.hepAmp).replace(',','.')||5000,hep:{u:+cfg.hep.split('/')[0]||25000,ml:+cfg.hep.split('/')[1]||50},amioInf:{mg:+cfg.amioInf.split('/')[0]||900,ml:+cfg.amioInf.split('/')[1]||50},paceMax:(RKO.PACEMAX[cfg.pacer]||RKO.PACEMAX.mindray).mA,atroAmp:+cfg.atroAmp,sayConc:cfg.sayConc!=='0',conc:concCfg(),out:(t,k)=>{Voice.say(t,k);said.push(t);said=said.slice(-3);$('#said').innerHTML=said.map((x,i)=>i===said.length-1?'<b>'+x+'</b>':'<span class="old">'+x+'</span>').join('<br>')},alarm:()=>Voice.alarm(),persist:s=>LS.set('rko_cur',s)})}
-function begin(sim,resumeState){Voice.unlock();{const N=plug('RkoNative');if(N)N.maxVolume().catch(()=>{})}E=engine();
+function begin(sim,resumeState){Voice.unlock();E=engine();
  if(resumeState){E.s=resumeState;E.s.q=[];E.s.cur=null;E.say('Wznawiam zapis.')}else E.start({sim,email:cfg.email,syr:cfg.syr?+cfg.syr:null});
  $('#simbar').classList.toggle('hide',!E.s.sim);$('#chg').classList.toggle('hide',!E.s.sim);
- show('run');wake(true);Ears.onResult=alts=>handle(alts);Ears.start();clearInterval(timer);timer=setInterval(loop,250);render()}
+ show('run');wake(true);Ears.onResult=(alts,conf)=>handle(alts,false,conf);Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
 $('#go').onclick=()=>begin(false);$('#sim').onclick=()=>begin(true);
+// mikrofon dopiero po pierwszym komunikacie (start rozpoznawania zabiera fokus audio na Androidzie)
+function startEarsAfterFirst(){let done=false;const go=()=>{if(done)return;done=true;Ears.start()};if(!Voice.speaking&&!Voice.queue.length){setTimeout(()=>{if(!Voice.speaking)go();else waitIdle()},600)}else waitIdle();
+ function waitIdle(){const h=sp=>{if(!sp){Voice.hooks.splice(Voice.hooks.indexOf(h),1);setTimeout(go,300)}};Voice.hooks.push(h)}setTimeout(go,20000)}
 let pendingIn=[];Voice.hooks.push(sp=>{if(!sp&&pendingIn.length){const q=pendingIn;pendingIn=[];q.forEach(a=>handle(a,true))}});
-function handle(alts,direct){if(!E)return;alts=[].concat(alts);
- if(!direct&&Voice.speaking){const b=RKO.bargeIn(alts[0],Voice.current);if(b==='ignore')return;if(b==='queue'){pendingIn.push(alts);$('#heard').textContent='w kolejce: '+alts[0];return}Voice.stop()}
+function handle(alts,direct,conf){if(!E)return;alts=[].concat(alts);
+ if(!direct&&Voice.speaking){const b=RKO.bargeIn(alts[0],Voice.current,cfg.barge,conf);if(b==='ignore')return;if(b==='queue'){pendingIn.push(alts);$('#heard').textContent='w kolejce: '+alts[0];return}Voice.stop()}
 $('#heard').textContent='usłyszano: '+[].concat(alts)[0];const c=E.input(alts);
  if(c==='send'){if(E.s.mode==='ended')sendReport(E.s);else E.say('Raport wyślę po zakończeniu.')}
  if(E.s.mode==='ended')finished();render()}
@@ -95,6 +98,9 @@ function renderList(){const L=LS.get('rko_reports',[]),q=LS.get('rko_queue',[]);
  L.forEach(s=>{const d=document.createElement('div');d.className='card';d.innerHTML='<span>'+new Date(s.t0).toLocaleString('pl-PL')+(s.sim?' · SYMULACJA':'')+(q.includes(s.id)?' · ✉ w kolejce':'')+'</span>';const b=document.createElement('button');b.textContent='Otwórz';b.onclick=()=>showReport(s);d.appendChild(b);$('#rlist').appendChild(d)});
  if(q.length&&cfg.email){const b=document.createElement('button');b.textContent='Wyślij kolejkę teraz';b.onclick=()=>flushQueue(false);$('#rlist').appendChild(b)}}
 // ---- test startowy ----
+$('#voicetest').onclick=()=>{Voice.unlock();const S=RKO.SAY;[S.start,S.scen,S.team,'Ustaw pompę 2,6 mililitra na godzinę.',S.warn15,S.rhythm,RKO.vfInstr('mindray',0),S.afterShock,'Dociągnij 450 miligramów amiodaronu do 500 mililitrów 5% glukozy. Ustaw kroplówkę na siedem kropli na minutę, czyli jedna kropla co osiem sekund. Wlew przez 24 godziny. Tylko glukoza 5%.','Średnie ciśnienie wynosi 72.','Zdanie spoza nagrań, czytane syntezatorem telefonu: test numer 17.'].forEach(t=>Voice.say(t));
+ const t0=Date.now();const h=sp=>{if(!sp){Voice.hooks.splice(Voice.hooks.indexOf(h),1);$('#stres').textContent='Test lektora: '+Math.round((Date.now()-t0)/1000)+' s, nagrań '+Voice.stats.clips+', syntezator '+Voice.stats.tts+', awaryjnie '+Voice.stats.fallback+(Voice.ctx?', WebAudio '+Voice.ctx.sampleRate+' Hz':', bez WebAudio')}};Voice.hooks.push(h)};
+{const N=plug('RkoNative');if(N)N.maxVolume().catch(()=>{})}
 $('#selftest').onclick=async()=>{const o=[];Voice.unlock();o.push('Nagrania lektora: '+Object.keys(Voice.clips).length);Voice.say('Test lektora. Słychać mnie dobrze?');Voice.say('Ustaw pompę 2,6 mililitra na godzinę.');
  try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();o.push('Pamięć: wolne ok. '+Math.round((e.quota-e.usage)/1e6)+' MB')}}catch(e){}
  const SR=plug('SpeechRecognition');if(SR){try{const a=await SR.available();o.push('Rozpoznawanie mowy: '+(a.available?'dostępne':'BRAK'));const p=await SR.requestPermissions();o.push('Mikrofon: '+p.speechRecognition)}catch(e){o.push('Mikrofon: błąd '+e.message)}}

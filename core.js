@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). Autor: Wujek Fido. */
 (function(root){
 'use strict';
-const VERSION='1.5';
+const VERSION='1.5.1';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -62,7 +62,12 @@ const CMDS=[
  ['yes',/^tak\b|\btak$|potwierdzam|zgadza/],['no',/^nie\b|\bnie$/]];
 function parsePair(text){const t=norm(text).replace(/\//g,' na ');const p=t.split(/ na /);if(p.length!==2)return null;const a=parseNumber(p[0]),b=parseNumber(p[1]);return a!=null&&b!=null?[a,b]:null}
 const CRIT=['rko_od','lucas_off','lucas_on','pause','arrest','shock_done','replay'];
-function bargeIn(heard,speaking){const h=norm(heard);if(!h)return 'ignore';if(speaking&&norm(speaking).includes(h))return 'ignore';const c=matchCommand(heard);return CRIT.includes(c)?'interrupt':'queue'}
+const BARGE_MIN=['stop','wyladowano','wyladowanie','wyladowane'];
+function echoOf(h,speaking){if(!speaking)return false;const sp=norm(speaking);if(sp.includes(h))return true;const w=h.split(' ').filter(x=>x.length>2);if(!w.length)return false;const sw=new Set(sp.split(' '));return w.filter(x=>sw.has(x)).length/w.length>=0.6}
+function bargeIn(heard,speaking,mode,conf){const h=norm(heard);if(!h)return 'ignore';if(echoOf(h,speaking))return 'ignore';mode=mode||'full';
+ if(mode==='off')return 'queue';if(conf!=null&&conf>=0&&conf<(mode==='min'?0.7:0.6))return 'queue';
+ if(mode==='min')return BARGE_MIN.includes(h)?'interrupt':'queue';
+ const c=matchCommand(heard);return CRIT.includes(c)&&h.split(' ').length<=5?'interrupt':'queue'}
 function matchCommand(text){const t=norm(text);if(!t)return null;for(const [id,re] of CMDS)if(re.test(t))return id==='organised0'?'organised':id;return null}
 function interpret(alts){alts=[].concat(alts||[]);for(const a of alts){const c=matchCommand(a);if(c)return {cmd:c,num:parseNumber(a),text:a}}
  for(const a of alts){const n=parseNumber(a);if(n!=null)return {cmd:'number',num:n,text:a}}return {cmd:null,num:null,text:alts[0]||''}}
@@ -563,6 +568,6 @@ function staticPhrases(){const a=new Set(Object.values(SAY).filter(Boolean));HT.
  for(let m=40;m<=200;m+=10)a.add(paceUp(m));[140,200].forEach(m=>a.add(SAY.cprPace+', '+m+' miliamperów.'));for(const d of [.5,1])for(const am of [.5,1]){a.add(atroText(d,am));a.add(atroNext(d,am))}const dO={};a.add('Cztery H sprawdzone.');a.add(SAY.lucasOff+' '+SAY.gas);a.add('Cztery T sprawdzone.');a.add(hepPrepText(25000,50));for(let m=15;m<=60;m+=5)a.add(minText(m));for(const ar of [SAY.hkArrest,SAY.hkOut])for(const p of ['',' '+SAY.hkProphDrip,' '+SAY.hkProphPump])a.add(insText()+' '+ar+p);for(let kg=40;kg<=150;kg++)for(const ind of ['pe','acs'])for(const f of [1,.5])a.add(hepBolusText(hepCalc(ind,kg,5000,25000,50,f).bml));a.add(SAY.hepNoInf);for(const g of [0,300,450])for(const c of [true,false])a.add(amioSay(c,amioCalc(g,c).mlh));[1,2,3].forEach(n=>a.add(amioConfText(n)));for(const g of [0,300,450])for(const st of [20,60])for(const c of [true,false])a.add(amioDripSay(900-g,st,c));['Noradrenalina.','Dobutamina.','Dopamina.','Zapisano: insulina z glukozą.','Zapisano: glukoza.','Zapisano: fentanyl.','Zapisano: midazolam.'].forEach(x=>a.add(x));a.add(sedText(dO));a.add(fentRepText(dO));a.add(midaRepText(dO));a.add(fentWarn(dO));['iso','dopa','adrinf'].forEach(d=>{a.add(binfPrep(d));a.add(binfPrep(d,{},false))});
  SIMR.forEach(r=>{a.add('Symulacja: na monitorze '+r+'.');a.add('Symulacja: zmiana rytmu. Na monitorze '+r+'.')});
  Object.values(SAY).forEach(t=>a.add(SAY.remind+' '+t));return [...a].filter(Boolean)}
-const API={minText,insText,HK_GLU,amioDrip,amioDripSay,numW,amioCalc,amioSay,amioCount,hepCalc,hepBolusText,hepPrepText,HEPB,parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
+const API={echoOf,BARGE_MIN,minText,insText,HK_GLU,amioDrip,amioDripSay,numW,amioCalc,amioSay,amioCount,hepCalc,hepBolusText,hepPrepText,HEPB,parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
 if(typeof module!=='undefined')module.exports=API;else root.RKO=API;
 })(this);
