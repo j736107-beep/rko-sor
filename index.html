@@ -1,0 +1,54 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RKO SOR</title><meta name="theme-color" content="#1a0f12"><meta name="author" content="Wujek Fido"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.png"><link rel="stylesheet" href="style.css"></head>
+<body>
+<section id="home" class="scr on">
+ <header><b>RKO SOR</b><span id="net" class="net">✈ offline</span></header>
+ <button id="go" class="go">NZK – START</button>
+ <button id="sim" class="simb">SYMULACJA (szkolenie)</button>
+ <p class="hint">Jedno dotknięcie, potem tylko głos. Telefon połóż na parapecie, głośnik w stronę zespołu.</p>
+ <div id="resume" class="card hide">Niezakończona akcja z <span id="resT"></span>. <button id="resGo">Wznów zapis</button> <button id="resEnd">Zamknij i zrób raport</button></div>
+ <nav class="row"><button data-s="settings">Ustawienia</button><button data-s="reports">Raporty <span id="qn"></span></button><button data-s="help">Pomoc</button></nav>
+ <p class="foot">v<span id="ver"></span> · Wujek Fido · ERC 2025 (PRR) + AHA 2025 · narzędzie pomocnicze, decyzja należy do lekarza</p>
+</section>
+<section id="run" class="scr">
+ <div id="simbar" class="simbar hide">SYMULACJA</div>
+ <div class="top"><span id="modeL">NZK</span><span id="ears" class="ears">🎤 …</span></div>
+ <div class="big" id="tTot">00:00</div><div class="lbl">czas RKO</div>
+ <div class="grid3"><div><div class="mid" id="tCyc">2:00</div><div class="lbl">do oceny rytmu</div></div><div><div class="mid" id="rhy">?</div><div class="lbl">rytm</div></div><div><div class="mid" id="shk">0</div><div class="lbl">wyładowania</div></div></div>
+ <div class="next" id="next">—</div>
+ <div class="said" id="said"></div><div class="heard" id="heard"></div>
+ <div class="fb">
+  <button data-c="tak" class="y">TAK</button><button data-c="nie" class="n">NIE</button><button data-c="podano">PODANO</button>
+  <button data-c="migotanie komór" class="r">VF / pVT</button><button data-c="asystolia">ASYST./PEA</button><button data-c="defibrylacja wykonana" class="r">WYŁADOWANO</button>
+  <button data-c="ROSC" class="y">ROSC</button><button data-c="zatrzymanie">ZATRZYMANIE</button><button data-c="nie mogę uciskać">SAM / BRAK UCISKU</button>
+  <button data-c="zwiększ">ZWIĘKSZ</button><button data-c="utrzymaj">UTRZYMAJ</button><button id="numB">LICZBA</button>
+  <button data-c="intubacja">INTUBACJA</button><button data-c="USG">USG</button><button data-c="powtórz">POWTÓRZ</button>
+  <button data-c="pauza">PAUZA</button><button data-c="dalej">DALEJ</button><button data-c="zakończ" class="n">ZAKOŃCZ</button>
+ </div>
+ <div class="fb2"><button data-c="tak, zakończ" class="n">TAK, ZAKOŃCZ</button><button data-c="wyślij na moją skrzynkę">WYŚLIJ</button><button data-c="potrzebny stymulator">STYMULACJA</button><button data-c="gotowe">GOTOWE</button><button data-c="bradykardia">BRADYKARDIA</button><button data-c="izoprenalina">IZOPRENALINA</button><button data-c="dopamina">DOPAMINA</button><button data-c="adrenalina wlew">ADRENALINA WLEW</button><button data-c="zmień rytm" id="chg" class="hide">ZMIEŃ RYTM</button></div>
+</section>
+<section id="report" class="scr">
+ <div class="noprint row"><button id="back">← Start</button><button id="print">Drukuj A4</button><button id="docx">DOCX</button><button id="send" class="y">WYŚLIJ</button></div>
+ <div id="rep"></div>
+</section>
+<section id="settings" class="scr"><div class="noprint row"><button data-s="home">← Start</button></div><h2>Ustawienia</h2>
+ <label>Mój e-mail (raporty)<input id="email" type="email" placeholder="lekarz@szpital.pl"></label>
+ <label>Defibrylator / energia<select id="energy"></select></label>
+ <label>Strzykawka noradrenaliny<select id="syr"><option value="">pytaj przy starcie</option><option value="50">50 ml (4 mg / 50 ml)</option><option value="20">20 ml (2 mg / 20 ml) – DO WERYFIKACJI</option></select></label>
+ <label>Stymulator – maks. prąd<select id="pacer"></select></label>
+ <label>Stymulacja przezskórna – elektrody (DO WERYFIKACJI)<select id="paceEl"><option value="ap">przednio-tylne (preferowane ERC)</option><option value="al">przednio-boczne</option></select></label>
+ <label>Atropina – ampułka (DO WERYFIKACJI)<select id="atroAmp"><option value="0.5">0,5 mg/ml</option><option value="1">1 mg/ml</option></select></label>
+ <label>Izoprenalina: mg/ml strzykawki (DO WERYFIKACJI)<input id="iso" placeholder="1/50"></label>
+ <label>Dopamina: mg/ml strzykawki (DO WERYFIKACJI)<input id="dopa" placeholder="200/50"></label>
+ <label>Adrenalina we wlewie: mg/ml (DO WERYFIKACJI)<input id="adrinf" placeholder="1/50"></label>
+ <label>Wlew adrenaliny: lektor mówi stężenie (jedyne miejsce z mikrogramami)<select id="sayConc"><option value="1">tak – „Stężenie 20 mikrogramów na mililitr”</option><option value="0">nie</option></select></label>
+ <label>Fentanyl – µg/ml w ampułce (DO WERYFIKACJI)<input id="fentConc" inputmode="decimal"></label>
+ <label>Midazolam – mg/ml po rozcieńczeniu (DO WERYFIKACJI)<input id="midaConc" inputmode="decimal"></label>
+ <button id="selftest">Test: głośnik, lektor, mikrofon, pamięć</button><pre id="stres"></pre>
+ <h3>Polityka prywatności</h3><p class="small">Aplikacja nie nagrywa dźwięku. Zapisuje wyłącznie zdarzenia (godzina, komenda, lek, dawka) w pamięci telefonu. Raport nie zawiera nazwiska ani PESEL – uzupełniasz je w systemie szpitalnym. Rozpoznawanie mowy działa w trybie offline, jeśli telefon ma pobrany pakiet języka polskiego (Ustawienia Androida → Rozpoznawanie mowy offline). Zgodność z polityką szpitala i RODO – DO WERYFIKACJI z IOD.</p>
+</section>
+<section id="reports" class="scr"><div class="noprint row"><button data-s="home">← Start</button></div><h2>Raporty</h2><div id="rlist"></div></section>
+<section id="help" class="scr"><div class="noprint row"><button data-s="home">← Start</button></div><div id="helpc"></div></section>
+<div id="pad" class="pad hide"><div id="padv">&nbsp;</div><div class="padg"></div></div>
+<script src="core.js"></script><script src="docx.js"></script><script src="voice.js"></script><script src="ui.js"></script>
+</body></html>
