@@ -1,4 +1,5 @@
-/* Lektor v1.5.1: nagrania dekodowane do WebAudio i odtwarzane bez przerw; TTS tylko dla całych zdań bez nagrania.
+/* v1.9: mikrofon tylko w oknie odpowiedzi ~8 s po pytaniu (przyciski są główne); metronom natywny w usłudze pierwszoplanowej, gdy dostępny.
+   Lektor v1.5.1: nagrania dekodowane do WebAudio i odtwarzane bez przerw; TTS tylko dla całych zdań bez nagrania.
    Rozpoznawanie mowy v1.7: trwały natywny rozpoznawacz (RkoNative.srStart, bez trybu offline), słucha także podczas lektora,
    wyniki pośrednie, natychmiastowy restart bez narastających przerw, kody błędów na ekranie, surowy log. */
 (function(root){
@@ -36,8 +37,8 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
  async _run(){V.speaking=true;V.startedAt=Date.now();V.onState(true);
   // v1.8: mikrofon pauzowany PRZED dźwiękiem lektora – rozpoznawacz nie zabiera fokusu audio i nie słyszy lektora
   try{if(S.running)await Promise.race([S.pause(),new Promise(r=>setTimeout(r,400))])}catch(e){}
-  while(V.queue.length){const it=V.queue.shift();V.current=it.text;V.kind=it.kind;V._cut=false;for(const seg of V.plan(it.text)){if(V._cut)break;try{seg.clips?await V._seq(seg.clips):await V._tts(seg.tts)}catch(e){}}if(it.kind==='ask'||it.kind==='remind')M.duck(1500);V.hooks.forEach(h=>{try{h('clip')}catch(e){}})}
-  V.current='';V.speaking=false;V.endedAt=Date.now();V.onState(false);S.resumeSoon()},
+  let asked=false;while(V.queue.length){const it=V.queue.shift();if(it.kind==='ask'||it.kind==='remind'||it.kind==='replay')asked=true;V.current=it.text;V.kind=it.kind;V._cut=false;for(const seg of V.plan(it.text)){if(V._cut)break;try{seg.clips?await V._seq(seg.clips):await V._tts(seg.tts)}catch(e){}}if(it.kind==='ask'||it.kind==='remind')M.duck(1500);V.hooks.forEach(h=>{try{h('clip')}catch(e){}})}
+  V.current='';V.speaking=false;V.endedAt=Date.now();V.onState(false);if(!S.windowMode)S.resumeSoon();else if(asked)S.openWindow()},
  async _seq(list,retry){V.stats.clips+=list.length;if(V.startReady){const p=V.startReady;V.startReady=null;await Promise.race([p,new Promise(r=>setTimeout(r,1500))])}
   if(V.ctx){try{if(V.ctx.state!=='running')await V.ctx.resume();const bs=await Promise.all(list.map(f=>f?V.buf(f):null));if(V._cut)return;
     V._intr=false;V.ctx.onstatechange=()=>{if(V.ctx.state!=='running')V._intr=true};
@@ -59,7 +60,11 @@ const QUIET_ERR=[6,7,'no-speech','aborted'];
 const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{},status:'off',barge:'min',fails:0,log:[],errors:{},
  classify(alts){return root.RKO?root.RKO.interpret(alts):{cmd:null}},
  listenWhileSpeaking(){return false},
- paused:false,
+ paused:false,windowMode:true,WINDOW:8000,
+ // v1.9: okno odpowiedzi – mikrofon włączony tylko ~8 s po pytaniu lektora, potem pauza (oszczędza baterię, brak fałszywych komend)
+ openWindow(ms){if(!S.running)return;S.resumeSoon();clearTimeout(S._wt);S.winUntil=Date.now()+(ms||S.WINDOW);S._wt=setTimeout(S.closeWindow,(ms||S.WINDOW)+250)},
+ closeWindow(){clearTimeout(S._wt);if(!S.running||!S.windowMode)return;if(M.userOn&&Date.now()-M.userT<6000){S._wt=setTimeout(S.closeWindow,1500);return}S.winUntil=0;if(!V.speaking)S.pause().catch(()=>{});S.set('mikrofon czeka na pytanie')},
+ inWindow(){return !S.windowMode||Date.now()<(S.winUntil||0)},
  async pause(){S.paused=true;clearTimeout(S._rt);S._sess();if(S.mode==='native'){const N=plug('RkoNative');if(N&&N.srPause)await N.srPause()}else if(S.mode==='web'&&S.web){try{S.web.abort()}catch(e){}}},
  resumeSoon(){clearTimeout(S._rt);if(!S.running)return;S._rt=setTimeout(()=>{if(!S.running||V.speaking)return;S.paused=false;
   if(S.mode==='native'){const N=plug('RkoNative');if(N&&N.srResume)N.srResume().catch(()=>{})}else if(S.mode==='web'&&S.web&&!S.webOn){try{S.web.start();S.webOn=true}catch(e){}}},250)},
@@ -69,7 +74,7 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
  async start(){if(S.running)return;S.running=true;const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:true}).catch(()=>{});const SR=plug('SpeechRecognition');
   if(isNative){if(SR){try{const p=await SR.checkPermissions();if(p.speechRecognition!=='granted'){const q=await SR.requestPermissions();if(q.speechRecognition!=='granted'){S.set('mikrofon: brak uprawnienia – użyj przycisków');S.addLog('błąd','brak uprawnienia do mikrofonu');S.running=false;return}}}catch(e){S.addLog('info','uprawnienia: '+(e&&e.message))}}
    while(S.running&&V.speaking){S.set('czekam, lektor mówi');await new Promise(r=>setTimeout(r,100))}if(!S.running)return;
-   if(N&&N.srStart){if(!S._lis){S._lis=true;try{N.addListener('sr',ev=>S._ev(ev))}catch(e){}}try{await N.srStart({language:'pl-PL'});S.mode='native';S.addLog('info','start rozpoznawania (natywne, pl-PL, bez trybu offline)');S.set('słucham')}catch(e){S.set('mikrofon: rozpoznawanie niedostępne ('+(e&&e.message||e)+') – użyj przycisków');S.addLog('błąd','srStart: '+(e&&e.message||e));S.running=false}return}
+   if(N&&N.srStart){if(!S._lis){S._lis=true;try{N.addListener('sr',ev=>S._ev(ev))}catch(e){}}try{await N.srStart({language:'pl-PL'});S.mode='native';S.addLog('info','start rozpoznawania (natywne, pl-PL, bez trybu offline)');S.set('słucham');if(S.windowMode)S.openWindow()}catch(e){S.set('mikrofon: rozpoznawanie niedostępne ('+(e&&e.message||e)+') – użyj przycisków');S.addLog('błąd','srStart: '+(e&&e.message||e));S.running=false}return}
    if(SR){S.mode='plugin';S._plugin(SR);return}}
   while(S.running&&V.speaking)await new Promise(r=>setTimeout(r,100));
   const W=root.SpeechRecognition||root.webkitSpeechRecognition;if(!W){S.set('brak rozpoznawania mowy – użyj przycisków');S.running=false;return}
@@ -79,7 +84,7 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
   r.onstart=()=>{S.webOn=true;S._ev({type:'ready'})};r.onspeechstart=()=>S._ev({type:'begin'});r.onspeechend=()=>S._ev({type:'end'});
   r.onend=()=>{S.webOn=false;S._sess();if(S.running)setTimeout(()=>{if(S.running&&!S.webOn&&!S.paused&&!V.speaking)try{S.web.start();S.webOn=true}catch(e){}},50)};
   r.onerror=e=>{S._err(e.error);if(['not-allowed','service-not-allowed','audio-capture','language-not-supported'].includes(e.error)){S.running=false;try{r.abort()}catch(x){}}};
-  try{r.start();S.webOn=true;S.set('słucham')}catch(e){S.set('mikrofon niedostępny')}},
+  try{r.start();S.webOn=true;S.set('słucham');if(S.windowMode)S.openWindow()}catch(e){S.set('mikrofon niedostępny')}},
  _sess(){clearTimeout(S._pt);S._pend=null;S._sent=null;S._lastPartial=''},
  _ev(ev){if(!ev)return;switch(ev.type){
   case 'ready':S._sess();if(!/^mikrofon: błąd (12|13|9)/.test(S.status)||Date.now()-(S._errT||0)>15000)S.set(V.speaking?'słucham (lektor mówi)':'słucham');break;
@@ -114,7 +119,7 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
    try{const r=await SR.start({language:'pl-PL',maxResults:5,partialResults:false,popup:false});if(r&&r.matches&&r.matches.length)S._final(r.matches,null);else S._err(7)}
    catch(e){S._err(String(e&&e.message||e))}await new Promise(r=>setTimeout(r,60))}},
  async info(){const N=plug('RkoNative');if(N&&N.srInfo){try{return await N.srInfo()}catch(e){return {error:String(e&&e.message||e)}}}return {web:!!(root.SpeechRecognition||root.webkitSpeechRecognition)}},
- stop(){S.running=false;S._sess();const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:false}).catch(()=>{});if(N&&N.srStop)N.srStop().catch(()=>{});const SR=plug('SpeechRecognition');if(SR&&S.mode==='plugin')SR.stop().catch(()=>{});if(S.web)try{S.web.abort()}catch(e){}S.set('off')}};
+ stop(){S.running=false;clearTimeout(S._wt);S.winUntil=0;S._sess();const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:false}).catch(()=>{});if(N&&N.srStop)N.srStop().catch(()=>{});const SR=plug('SpeechRecognition');if(SR&&S.mode==='plugin')SR.stop().catch(()=>{});if(S.web)try{S.web.abort()}catch(e){}S.set('off')}};
 // ---- metronom uciśnięć (WebAudio, planowany z wyprzedzeniem – bez przerw); milknie, gdy mówi lektor ----
 const M={want:false,rate:110,vol:0.15,next:0,nodes:[],timer:null,clicks:0,duckUntil:0,userOn:false,userT:0,USER_CAP:4000,
  duck(ms){M.duckUntil=Math.max(M.duckUntil,Date.now()+ms)},
@@ -122,12 +127,14 @@ const M={want:false,rate:110,vol:0.15,next:0,nodes:[],timer:null,clicks:0,duckUn
  ducked(){const n=Date.now();return n<M.duckUntil||(M.userOn&&n-M.userT<M.USER_CAP)},
  start(){if(!M.timer)M.timer=setInterval(M.tick,25)},
  active(){return M.want&&!V.speaking&&!M.ducked()&&V.ctx&&V.ctx.state==='running'},
- tick(){const c=V.ctx;if(M.want&&c&&c.state!=='running'&&c.state!=='closed'&&!V.speaking&&Date.now()-(M._rs||0)>500){M._rs=Date.now();try{c.resume()}catch(e){}}if(!M.active()){if(M.nodes.length)M.cut();M.next=0;return}const per=60/Math.max(100,Math.min(120,M.rate||110));
+ nat(){return isNative&&plug('RkoNative')&&plug('RkoNative').metro?plug('RkoNative'):null},
+ natSync(){const N=M.nat();const on=!!(M.want&&!V.speaking&&!M.ducked());const st=on+'|'+M.rate+'|'+M.vol;if(st===M._ns)return;M._ns=st;N.metro({on,rate:Math.max(100,Math.min(120,M.rate||110)),vol:Math.max(0.02,Math.min(1,M.vol||0.15))}).catch(()=>{M._ns=null})},
+ tick(){if(M.nat()){M.natSync();return}const c=V.ctx;if(M.want&&c&&c.state!=='running'&&c.state!=='closed'&&!V.speaking&&Date.now()-(M._rs||0)>500){M._rs=Date.now();try{c.resume()}catch(e){}}if(!M.active()){if(M.nodes.length)M.cut();M.next=0;return}const per=60/Math.max(100,Math.min(120,M.rate||110));
   if(M.next<c.currentTime+0.01)M.next=c.currentTime+0.06;while(M.next<c.currentTime+0.15){M.click(M.next);M.next+=per}
   M.nodes=M.nodes.filter(n=>n.t>c.currentTime-0.1)},
  click(t){const c=V.ctx;try{const o=c.createOscillator(),g=c.createGain();o.type='triangle';o.frequency.value=1250;const v=Math.max(0.02,Math.min(1,M.vol||0.15));
   g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(v,t+0.003);g.gain.exponentialRampToValueAtTime(0.0001,t+0.035);o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+0.04);M.nodes.push({o,t});M.clicks++}catch(e){}},
- cut(){M.nodes.forEach(n=>{try{n.o.stop()}catch(e){}});M.nodes=[];M.next=0}};
+ cut(){if(M.nat()){M.natSync()}M.nodes.forEach(n=>{try{n.o.stop()}catch(e){}});M.nodes=[];M.next=0}};
 V.hooks=[];V.onState=sp=>{if(sp===false)V.lastText=V._lt;if(sp)M.cut();V.hooks.forEach(h=>{try{h(sp)}catch(e){}})};
 const _say=V.say;V.say=(t,k)=>{V._lt=(V._lt&&V.speaking?V._lt+' ':'')+t;_say(t,k)};
 root.Voice=V;root.Metro=M;root.Ears=S;root.isNative=isNative;root.plug=plug;

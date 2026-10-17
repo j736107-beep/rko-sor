@@ -35,3 +35,13 @@ label{display:block;margin:10px 0}input,select{display:block;width:100%;font:inh
 .ctxb.n1 button{min-height:110px;font-size:2.2rem}
 .ctxb button.kr{border-left:10px solid #c0392b}.ctxb button.kg{border-left:10px solid #2b7a3d}
 .ctxb button.act,.fb button.act,.fb2 button.act{background:#1f6feb !important;color:#fff !important;border-color:#1f6feb}
+
+/* v1.9 */
+.big.cg{color:#3ddc84}.big.cy{color:#ffd43b}.big{font-size:22vw;line-height:1}
+.rhyb{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:8px 0}.rhyb button{padding:16px 2px;font-size:15px;font-weight:700}.rhyb button.kr{background:#7a1d2a}.rhyb button.kg{background:#1d5a33}.rhyb button.act{outline:3px solid #ffd43b}
+.undo{display:flex;align-items:center;gap:10px;margin:6px 0}.undo button{background:#b8860b;color:#fff;font-weight:700;padding:14px 22px;font-size:18px}
+.ban{background:#3a2a05;border:1px solid #b8860b;padding:10px;border-radius:8px;margin:8px 0;font-size:14px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:flex;align-items:center;justify-content:center}.modal.hide{display:none}
+.mbox{background:#1d1418;padding:14px;border-radius:12px;width:92vw;max-height:90vh;overflow:auto}.mbox textarea{width:100%;font-size:16px;box-sizing:border-box}
+.wywb{font-size:13px;padding:6px 10px}.mono{font-family:monospace;letter-spacing:1px}
+#licCode{width:100%;font-family:monospace}
