@@ -55,11 +55,11 @@ h2,h3{font-weight:600;letter-spacing:.3px}
 
 /* v1.9.4: wszystko mieści się w panelu na wąskich ekranach (360–412 dp), także przy powiększonej czcionce */
 html,body{max-width:100%;overflow-x:hidden}
-button{min-width:0;max-width:100%;overflow-wrap:anywhere;hyphens:auto}
+button{min-width:0;max-width:100%;overflow-wrap:normal;word-break:normal;hyphens:manual}
 .row>*,.ctxb>*,.rhyb>*,.fb>*,.fb2>*,.padg>*{min-width:0}
 .ctxb{grid-template-columns:repeat(2,minmax(0,1fr))}.ctxb.n1{grid-template-columns:minmax(0,1fr)}.ctxb.n3,.ctxb.n5{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ctxb button{font-size:clamp(1rem,5.4vw,1.4rem);min-height:68px;padding:8px 4px}.ctxb.n1 button{font-size:clamp(1.3rem,7vw,2rem);min-height:84px}
-.rhyb{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.rhyb button{font-size:clamp(10px,3vw,15px);overflow-wrap:normal;hyphens:none;padding:12px 1px;letter-spacing:0}
+.rhyb{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.rhyb button{font-size:clamp(10px,3vw,15px);padding:12px 1px;letter-spacing:0}
 .fb,.fb2{grid-template-columns:repeat(3,minmax(0,1fr))}.fb button,.fb2 button{font-size:clamp(11px,3.5vw,14px);padding:11px 2px}
 .grid3{grid-template-columns:repeat(3,minmax(0,1fr))}.mid{font-size:clamp(20px,7.5vw,30px)}.lbl{font-size:10px;letter-spacing:.8px}
 .big{font-size:min(22vw,120px)}
@@ -67,11 +67,30 @@ button{min-width:0;max-width:100%;overflow-wrap:anywhere;hyphens:auto}
 .padg{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;max-width:420px;margin:0 auto}.padg button{font-size:22px;padding:9px 0;min-height:46px}
 #padv{font-size:30px;line-height:1.2}
 .mbox{width:min(92vw,520px)}.strow .ans{display:flex;gap:6px}.strow .ans button{min-width:0}
-.undo{flex-wrap:wrap}.undo span{min-width:0;overflow-wrap:anywhere}
-/* v1.9.4: oczekiwany przycisk delikatnie pulsuje (zatrzymuje się po naciśnięciu) */
-@keyframes expPulse{0%,100%{box-shadow:0 0 0 0 rgba(143,184,230,0);filter:none}50%{box-shadow:0 0 0 4px rgba(143,184,230,.35);filter:brightness(1.18)}}
-button.exp{animation:expPulse 1.6s ease-in-out infinite}
-button.kr.exp,button.r.exp{--pc:rgba(224,82,82,.35)}button.kg.exp{--pc:rgba(95,201,141,.35)}button.ka.exp{--pc:rgba(226,180,67,.35)}
-button.exp[class*="k"]{animation-name:expPulse2}@keyframes expPulse2{0%,100%{box-shadow:0 0 0 0 transparent;filter:none}50%{box-shadow:0 0 0 4px var(--pc,rgba(143,184,230,.35));filter:brightness(1.18)}}
+.undo{flex-wrap:wrap}.undo span{min-width:0;overflow-wrap:break-word}
+/* v1.9.5: wiersze przycisków – całe słowa, nigdy litera pod literą */
+.row{flex-wrap:wrap}.row>button{flex:1 1 auto;white-space:nowrap;min-width:max-content}
+@media (max-width:380px){.row>button{white-space:normal;min-width:0;flex-basis:40%}}
+.repb{display:flex;flex-direction:column;gap:8px;margin:6px 0}
+.repb button{width:100%;display:block;text-align:center;font-size:17px;padding:14px 12px;border-width:1.5px;white-space:normal;letter-spacing:.3px}
+.tb{background:#22303f!important;border-color:#3d72a8!important;color:#d6e6f7}.tr{background:#3a2528!important;border-color:#a34545!important;color:#f3dede}
+.tg{background:#223529!important;border-color:#3f9160!important;color:#d9f0e2}.ta{background:#3a3122!important;border-color:#b8893a!important;color:#f4e6c8}.tn{background:#2d343c!important;border-color:#59626c!important}
+.repb .aimain{font-size:18px;padding:18px 12px;background:#2a4a6e!important;border:2px solid #6aa3dc!important;color:#fff}
+.fb button,.fb2 button{line-height:1.15}
+/* v1.9.5: duży przycisk mikrofonu (PTT) */
+.pttrow{display:flex;gap:10px;align-items:center;margin:8px 0}
+.ptt{flex:0 0 auto;width:96px;height:96px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px;background:#2d343c;border:2px solid #59626c;color:#b9c2cc;font-size:13px;letter-spacing:1px}
+.ptt.on{background:#1f5a38;border-color:#5fc98d;color:#fff;animation:pttP 1s ease-in-out infinite}
+@keyframes pttP{0%,100%{box-shadow:0 0 0 0 rgba(95,201,141,.7)}50%{box-shadow:0 0 0 10px rgba(95,201,141,0)}}
+.recog{flex:1;min-width:0;font-size:14px;color:var(--mu);background:var(--p1);border:1px solid var(--bd);border-radius:8px;padding:8px}.recog.ok{color:#fff;border-color:var(--grn);background:var(--grnT);font-weight:600;font-size:16px}
+/* v1.9.5: oczekiwany przycisk – wyraźne miganie (zatrzymuje się po naciśnięciu) */
+@keyframes expBlink{0%,100%{box-shadow:0 0 0 3px var(--pc,#8fb8e6),0 0 18px 4px var(--pc,#8fb8e6);filter:brightness(1.45)}50%{box-shadow:0 0 0 0 transparent;filter:brightness(.85)}}
+button.exp{animation:expBlink 1s ease-in-out infinite,expFade 1s ease-in-out infinite;border-color:#fff!important;--pc:#8fb8e6}
+@keyframes expFade{0%,100%{opacity:1}50%{opacity:.82}}
+button.kr.exp,button.r.exp{--pc:#ff6b6b}button.kg.exp{--pc:#5fc98d}button.ka.exp{--pc:#f0c050}button.kn.exp,button.n.exp{--pc:#c8d0d8}
 button.act{animation:none!important}
-@media (prefers-reduced-motion:reduce){button.exp{animation:none;outline:2px solid #8fb8e6;outline-offset:1px}}
+@media (prefers-reduced-motion:reduce){button.exp{animation:none;box-shadow:0 0 0 3px var(--pc,#8fb8e6)}}
+/* v1.9.5: kolumny zależne od wielkości czcionki – przy dużej czcionce mniej kolumn zamiast łamania słów */
+.fb,.fb2{grid-template-columns:repeat(auto-fit,minmax(7.4em,1fr))}.fb button,.fb2 button{font-size:13px;padding:11px 3px}
+.rhyb{grid-template-columns:repeat(auto-fit,minmax(5.4em,1fr))}.rhyb button{font-size:13px}
+.ctxb button{font-size:clamp(.9rem,4.4vw,1.35rem);letter-spacing:0}

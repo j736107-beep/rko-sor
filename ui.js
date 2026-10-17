@@ -36,7 +36,7 @@ function begin(sim,resumeState){if(sim&&!needFull('Symulacja'))return;if(typeof 
  Ears.windowMode=true;if(resumeState){E.resume(resumeState)}else E.start({sim,email:cfg.email,syr:cfg.syr?+cfg.syr:null});
  Ears.classify=alts=>RKO.interpret(alts,E&&E.s&&E.s.mode!=='idle'?E.ctx():{});
  $('#simbar').classList.toggle('hide',!E.s.sim);$('#chg').classList.toggle('hide',!E.s.sim);
- Metro.start();show('run');wake(true);Metro.useNative=true;nat('action',{on:true});if(cfg.pin==='1')nat('pin',{on:true});$('#wywB').classList.toggle('hide',!isFull());Ears.onResult=(alts,conf,src)=>{if(!Ears.inWindow()){Ears.mark('poza oknem odpowiedzi – pominięto');return}handle(alts,false,conf)};Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
+ Metro.start();show('run');wake(true);Metro.useNative=true;nat('action',{on:true});if(cfg.pin==='1')nat('pin',{on:true});$('#wywB').classList.toggle('hide',!isFull());Ears.onResult=(alts,conf,src)=>{const p=PTT.on;if(!p&&!Ears.inWindow()){Ears.mark('poza oknem odpowiedzi – pominięto');return}if(p){pttSet(false);handle(alts,true,conf,'ptt');showRec();return}handle(alts,false,conf)};Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
 $('#go').onclick=()=>{if(E&&E.s&&E.s.mode!=='idle'&&E.s.mode!=='ended'){show('run');return}begin(false)};$('#sim').onclick=()=>begin(true);
 // mikrofon dopiero po pierwszym komunikacie (start rozpoznawania zabiera fokus audio na Androidzie)
 // v1.6.2: mikrofon startuje natychmiast po końcu pierwszego nagrania (pętla natywna i tak czeka, aż lektor zamilknie)
@@ -49,7 +49,7 @@ function handle(alts,direct,conf,src){if(mic.on){mic.res(alts);return}if(!E)retu
 $('#heard').textContent='mikrofon: '+[].concat(alts)[0];const before=E.s.cur&&E.s.cur.id,beforeTxt=E.s.cur&&E.s.cur.text,k0=RKO.btnKey(E.s);const r=RKO.interpret(alts,E.ctx());const c=E.input(alts,src||(direct?'przycisk':'głos'));
  if(c==='unmatched')$('#heard').textContent='nie rozpoznano: „'+alts[0]+'” – powiedz jeszcze raz albo użyj przycisku';
  else if(beforeTxt&&RKO.btnKey(E.s)!==k0&&!(E.s.cur&&E.s.cur.text===beforeTxt))Voice.skipStale(beforeTxt);Ears.mark(c&&c!=='unmatched'?('komenda: '+c+(r.fuzzy?' (przybliżone)':'')+(before?' [pytanie: '+before+']':'')):('nie pasuje'+(before?' [pytanie: '+before+']':'')));
- if(c==='send'){if(E.s.mode==='ended'){if(cfg.email)sendReport(E.s);else{showReport(E.s);openAI(E.s)}}else E.say('Raport wyślę po zakończeniu.')}
+ if(c==='send'){if(E.s.mode==='ended'){if(cfg.email)sendReport(E.s);else{showReport(E.s);aiOneTap(E.s)}}else E.say('Raport wyślę po zakończeniu.')}
  if(E.s.mode==='ended')finished();render()}
 $$('.fb [data-c],.fb2 [data-c]').forEach(b=>b.onclick=()=>{Ears.addLog('przycisk',b.dataset.c);press(b,b.dataset.c);handle([b.dataset.c],true,null,'przycisk')});
 // v1.8: przyciski kontekstowe – do bieżącego pytania lektora; kolor aktywny do przyjęcia komendy / następnego kroku
@@ -66,6 +66,11 @@ let rhyKey=null;function renderRhy(act){const box=$('#rhyb');if(!box||!E)return;
  box.querySelectorAll('button').forEach(b=>b.classList.toggle('act',act!=null&&b.dataset.c===act))}
 // v1.9: COFNIJ przez 5 s po każdym potwierdzeniu
 function renderUndo(){const u=$('#undo');if(!E||!E.canUndo){u.classList.add('hide');return}const ok=E.canUndo();u.classList.toggle('hide',!ok);if(ok){const l=Math.max(0,5-Math.floor((Date.now()-E.undoSnap.t)/1000));$('#undoB').textContent='COFNIJ ('+l+')';$('#undoT').textContent=E.undoSnap.label.slice(0,60)}}
+// v1.9.5: duży przycisk mikrofonu (naciśnij i mów) – komendy globalne w każdej chwili
+const PTT={on:false,until:0};function pttSet(on){PTT.on=on;const b=$('#ptt');if(!b)return;b.classList.toggle('on',on);$('#pttL').textContent=on?'SŁUCHAM…':'MÓW'}
+$('#ptt').onclick=async()=>{if(!E)return;if(PTT.on){pttSet(false);try{Ears.closeWindow()}catch(e){}return}Voice.stop&&Voice.stop();pttSet(true);PTT.until=Date.now()+8000;try{if(!Ears.running)await Ears.start();Ears.openWindow(8000)}catch(e){}};
+setInterval(()=>{if(PTT.on&&Date.now()>PTT.until)pttSet(false)},300);
+function showRec(){if(E&&E.lastRec&&Date.now()-E.lastRec.t<6000){$('#recog').textContent=E.lastRec.text+' — COFNIJ przez 5 s, jeśli źle';$('#recog').classList.add('ok')}}
 $('#undoB').onclick=()=>{if(!E)return;Voice.stop();Ears.addLog('przycisk','COFNIJ');if(E.undo())toast('Cofnięto');render()};
 // v1.9: wywiad (tekst, dyktowanie klawiaturą)
 let wywTarget=null;function openWyw(target){wywTarget=target;$('#wywT').value=target.wywiad||'';$('#wyw').classList.remove('hide');setTimeout(()=>$('#wywT').focus(),100)}
@@ -162,7 +167,10 @@ $('#copy').onclick=()=>curRep&&copyText(repText(curRep)).then(()=>toast('Raport 
 $('#pdf').onclick=async()=>{if(!curRep)return;const N=NAT();if(N&&N.pdf){try{const r=await N.pdf({name:fname(curRep).replace(/\.docx$/,'.pdf')});await N.share({uri:r.uri,title:r.name,mime:'application/pdf'})}catch(e){toast('PDF: '+(e.message||e))}}else window.print()};
 $('#wywR').onclick=()=>curRep&&openWyw(curRep);
 function openAI(s){if(!s)return;if(!needFull('Wysyłka do AI'))return;$('#aipT').value=RKO.AI_PROMPT+'\n\n'+RKO.anonymize(repText(s));$('#aipOk').checked=false;$('#aip').classList.remove('hide')}
-$('#ai').onclick=()=>openAI(curRep);
+// v1.9.5: jedno dotknięcie – kopiuje raport do schowka i otwiera menu udostępniania
+async function aiOneTap(s){if(!s||!needFull('Wysyłka do AI'))return;const t=RKO.AI_PROMPT+'\n\n'+RKO.anonymize(repText(s));await copyText(t);toast('Raport skopiowany — wklej w ChatGPT');const N=NAT();
+ try{if(N&&N.shareText)await N.shareText({text:t,title:'Raport RKO – do poprawy stylu'});else if(navigator.share)await navigator.share({text:t})}catch(e){}}
+$('#ai').onclick=()=>aiOneTap(curRep);$('#aiPrev').onclick=()=>openAI(curRep);
 $('#aipX').onclick=()=>$('#aip').classList.add('hide');
 $('#aipGo').onclick=async()=>{if(!$('#aipOk').checked){toast('Najpierw sprawdź podgląd i zaznacz potwierdzenie');return}const t=RKO.anonymize($('#aipT').value);const N=NAT();
  try{if(N&&N.shareText)await N.shareText({text:t,title:'Raport RKO – do poprawy stylu'});else if(navigator.share)await navigator.share({text:t});else{await copyText(t);toast('Skopiowano – wklej w aplikacji AI')}}catch(e){}$('#aip').classList.add('hide')};

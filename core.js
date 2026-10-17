@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). */
 (function(root){
 'use strict';
-const VERSION='1.9.4';
+const VERSION='1.9.5';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -220,7 +220,7 @@ const SAY={
  noraPrep50:'Noradrenalina: 4 ampułki po 1 miligramie dociągnij solą fizjologiczną do 50 mililitrów w strzykawce 50.',
  noraPrep20:'Noradrenalina: 2 ampułki po 1 miligramie dociągnij solą fizjologiczną do 20 mililitrów w strzykawce 20.',
  setPump:'Ustaw pompę',upPump:'Zwiększam. Ustaw pompę',keepPump:'Utrzymaj. Pompa',
- mapIs:'Średnie ciśnienie tętnicze',
+ mapIs:'Średnie ciśnienie tętnicze',recVF:'Rozpoznałam: migotanie komór.',recVT:'Rozpoznałam: częstoskurcz komorowy bez tętna.',recAsy:'Rozpoznałam: asystolia.',recPEA:'Rozpoznałam: aktywność elektryczna bez tętna.',recPulse:'Rozpoznałam: tętno.',recRosc:'Rozpoznałam: powrót krążenia.',remeasure:'Zmierz ciśnienie ponownie za 5 minut.',
  noraHigh:'Wysoka dawka noradrenaliny. Wezwij anestezjologa. Rozważ drugi lek i przyczynę.',
  lowOut:'Czy są objawy niskiego rzutu: słaby tętno, zimne kończyny, wydłużony powrót kapilarny?',
  dobuPrep:'Dobutamina: 250 miligramów dociągnij solą fizjologiczną do 50 mililitrów w strzykawce 50.',
@@ -292,7 +292,7 @@ P.start=function(o){o=o||{};const now=this.now();this.s={mode:'arrest',sim:!!o.s
 P.ask=function(id,text,o){o=o||{};const q={id,text,def:o.def,tries:o.tries==null?Infinity:o.tries,prio:o.prio||0,asked:0,at:null,rem:0,data:o.data,timeout:o.timeout};
  const s=this.s;s.q=s.q.filter(x=>x.id!==id);if(s.cur&&s.cur.id===id)s.cur=null;
  let i=s.q.findIndex(x=>(x.prio||0)<q.prio);if(i<0)i=s.q.length;s.q.splice(i,0,q);
- if(s.cur&&(s.cur.prio||0)<q.prio){const c=s.cur;s.cur=null;let j=s.q.findIndex(x=>(x.prio||0)<(c.prio||0));if(j<0)j=s.q.length;s.q.splice(j,0,c)}
+ if(s.cur&&s.cur!==this._ans&&(s.cur.prio||0)<q.prio){const c=s.cur;s.cur=null;let j=s.q.findIndex(x=>(x.prio||0)<(c.prio||0));if(j<0)j=s.q.length;s.q.splice(j,0,c)}
  this.pump();return q};
 P.has=function(id){const s=this.s;return (s.cur&&s.cur.id===id)||s.q.some(x=>x.id===id)};
 P.drop=function(id){const s=this.s;s.q=s.q.filter(x=>x.id!==id);if(s.cur&&s.cur.id===id){s.cur=null;this.pump()}};
@@ -309,7 +309,7 @@ P.tick=function(){const s=this.s,now=this.now();if(s.mode==='idle'||s.mode==='en
  if(s.mode==='arrest'&&s.offStart&&!s.lucasP&&!s.offWarned&&now-s.offStart>10*MS&&s.cur&&['rhythm','rhyAsy','pulse'].includes(s.cur.id)){s.offWarned=true;this.alarm('cpr');this.say(SAY.offWarn,'alarm');this.log('ucisk','Przerwa w uciskaniu >10 s')}
  if(s.mode==='arrest'){const el=now-s.cycleT;
   if(!s.warned&&el>=CYCLE-15*MS){s.warned=true;this.say(SAY.warn15)}
-  if(el>=CYCLE&&!this.has('rhythm')){s.offStart=now;if(s.sim)this.simShow();this.ask('rhythm',s.cprPace?SAY.rhythmPace:SAY.rhythm,{prio:2});s.checks=(s.checks||0)+1;if(s.checks%2===0)this.checkQs()}
+  if(el>=CYCLE&&!['rhythm','rhyAsy','pulse','shock'].some(x=>this.has(x))){s.offStart=now;if(s.sim)this.simShow();this.ask('rhythm',s.cprPace?SAY.rhythmPace:SAY.rhythm,{prio:2});s.checks=(s.checks||0)+1;if(s.checks%2===0)this.checkQs()}
   if(s.adrDue&&!s.adrHold&&now>=s.adrDue&&!this.has('adr')){this.ask('adr',adrText(s),{prio:1})}
   {const mn=Math.floor((now-s.arrestT)/60000);if(mn>=15&&mn%5===0&&s.minSaid!==mn){s.minSaid=mn;this.say(minText(mn))}}
   if(this.full&&!s.decided&&now-s.arrestT>=20*60*MS&&s.cycles>=1){s.decided=true;this.decSummary()}else if(s.decNext&&now>=s.decNext&&!this.has('decExc')&&!this.has('decEnd'))this.decSummary();
@@ -361,7 +361,9 @@ P.onRhythmCmd=function(c,lab){const s=this.s;if(!['shockable','nonshock','nopuls
  if(c==='pulse'){this.newCycle();this.toRosc();return true}
  if(c==='brady'){this.newCycle();this.log('rytm','Bradykardia z tętnem');s.preRosc='bradykardia';this.toRosc();this.startBrady();return true}return false};
 // odpowiedź na bieżące pytanie
-P.answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd:'default',def:q.def,skip:true};else return false}
+P.answer=function(q,r){const pv=this._ans;this._ans=q;try{return this._answer(q,r)}finally{this._ans=pv}};
+// v1.9.5: pytanie właśnie obsługiwane nigdy nie wraca do kolejki (błąd pętli ciśnienia / ETCO2)
+P._answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd:'default',def:q.def,skip:true};else return false}
  const s=this.s,c=r.cmd,yes=c==='yes',no=c==='no';
  const def=c==='default';const D=def?r.def:null;
  switch(q.id){
@@ -540,7 +542,10 @@ P.htTreat=function(i){const n=HT[i][0];if(n==='hiperkaliemia'){this.ask('calcium
  if(this.s.sim&&this.s.simCause===n)this.s.simTreated=true};
 // wejście z mowy/przycisku
 P.ctx=function(){const s=this.s,c=s&&s.cur;return {rhythm:!!(s&&s.mode==='arrest'&&c&&['rhythm','rhyAsy','pulse'].includes(c.id)),confirm:!!c}};
+function recKey(r,alts){const t=norm([].concat(alts)[0]||'');switch(r.cmd){case 'shockable':return /\bvt\b|pvt|czestoskurcz/.test(t)?'recVT':'recVF';case 'nonshock':return /asyst/.test(t)?'recAsy':/pea|aktywn|bez tetna/.test(t)?'recPEA':null;case 'nopulse':return 'recPEA';case 'pulse':return 'recPulse';case 'rosc':return 'recRosc'}return null}
 P.input=function(alts,src){const r0=interpret(alts,this.ctx());this._ack=r0.cmd==='ack';this._ackSaid=false;const s=this.s;const snap=s&&s.mode!=='idle'&&s.mode!=='ended'?JSON.stringify(s):null;const n0=s&&s.log?s.log.length:0;this._src=src||null;
+ // v1.9.5: komenda głosowa (mikrofon PTT) w dowolnej chwili przełącza algorytm; potwierdzenie lektorem + COFNIJ 5 s
+ const rk=recKey(r0,alts);if(rk&&s&&(s.mode==='arrest'||s.mode==='rosc')&&(src==='głos'||src==='ptt')){this.lastRec={t:this.now(),text:SAY[rk]};this.say(SAY[rk],'ack');if(s.mode==='rosc'&&['shockable','nonshock','nopulse'].includes(r0.cmd))this.toArrest(true)}
  try{const res=this._input(alts);const s2=this.s;if(snap&&s2&&s2.log&&s2.log.length>n0&&res!=='unmatched'){const last=s2.log[s2.log.length-1];this.undoSnap={json:snap,t:this.now(),label:last.txt}}this.persist(this.s);return res}finally{this._ack=false;this._src=null}};
 // COFNIJ: 5 s po każdym potwierdzeniu
 P.canUndo=function(){return !!(this.undoSnap&&this.now()-this.undoSnap.t<=5*MS&&this.s&&this.s.mode!=='ended')};
@@ -606,7 +611,8 @@ P.onMap=function(m,sy,di){const s=this.s;s.lastMap=m;this.log('ciśnienie',sy+'/
  if(m<65){s.mapHiN=0;if(!s.nora){this.say(pre);this.startNora()}else{this.say(pre);this.noraUp()}}
  else{if(s.nora&&m>80){s.mapHiN=(s.mapHiN||0)+1;if(s.mapHiN>=2){s.mapHiN=0;this.log('ciśnienie','MAP >80 w dwóch kolejnych pomiarach');this.noraDown(pre+' '+SAY.mapHi2)}else this.say(pre+' '+SAY.mapHi1)}
   else if(s.nora){s.mapHiN=0;this.say(pre+' '+SAY.mapKeep)}else this.say(pre);
-  if(!s.dobu&&!s.dobuAsked)this.ask('lowOut',SAY.lowOut,{def:'no',tries:1})}};
+  if(!s.dobu&&!s.dobuAsked&&!this.has('lowOut'))this.ask('lowOut',SAY.lowOut,{def:'no',tries:1})}
+ if(s.mapHiN!==1)this.say(SAY.remeasure);this.drop('sys');this.drop('dia');this.log('ciśnienie','Kolejny pomiar za 5 min')};
 P.startNora=function(){const s=this.s;s.noraPending=true;this.contNora()};
 P.contNora=function(){const s=this.s;if(s.noraPending){if(!s.kg){this.ask('weight',SAY.weight,{prio:1});return}
  if(!s.syr){this.ask('syr',SAY.syr,{prio:1,def:50,tries:1});return}

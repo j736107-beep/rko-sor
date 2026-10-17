@@ -17,6 +17,7 @@
  <div class="big cg" id="tCyc">2:00</div><div class="lbl" id="tCycL">uciskanie – do oceny rytmu</div>
  <div class="grid3"><div><div class="mid" id="tTot">00:00</div><div class="lbl">czas RKO</div></div><div><div class="mid" id="rhy">?</div><div class="lbl">rytm</div></div><div><div class="mid" id="shk">0</div><div class="lbl">wyładowania</div></div></div>
  <div class="next" id="next">—</div>
+ <div class="pttrow"><button id="ptt" class="ptt" aria-label="Mikrofon – powiedz komendę"><svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg><span id="pttL">MÓW</span></button><div id="recog" class="recog">Naciśnij mikrofon i powiedz: migotanie komór, asystolia, PEA, tętno…</div></div>
  <div id="undo" class="undo hide"><button id="undoB">COFNIJ</button><span id="undoT"></span></div>
  <div id="ctxb" class="ctxb"></div>
  <div id="rhyb" class="rhyb"></div>
@@ -32,7 +33,7 @@
  <div class="fb2"><button data-c="tak, zakończ" class="r">TAK, ZAKOŃCZ</button><button data-c="wyślij na moją skrzynkę">WYŚLIJ</button><button data-c="LUCAS pauza">LUCAS PAUZA</button><button data-c="LUCAS włączony">LUCAS PRACUJE</button><button data-c="potrzebny stymulator">STYMULACJA</button><button data-c="gotowe">GOTOWE</button><button data-c="bradykardia">BRADYKARDIA</button><button data-c="izoprenalina">IZOPRENALINA</button><button data-c="dopamina">DOPAMINA</button><button data-c="wlew adrenaliny">ADRENALINA WLEW</button><button data-c="zmniejsz">ZMNIEJSZ</button><button data-c="wlew heparyny">HEPARYNA WLEW</button><button data-c="wlew amiodaronu">AMIODARON WLEW</button><button data-c="nie wiem">NIE WIEM</button><button data-c="zmień rytm" id="chg" class="hide">ZMIEŃ RYTM</button></div>
 </section>
 <section id="report" class="scr">
- <div class="noprint row"><button id="back">← Start</button><button id="ai" class="kb aimain">WYŚLIJ DO AI (ChatGPT / Claude / Grok)</button><button id="pdf">PDF</button><button id="copy">Kopiuj</button><button id="wywR">Wywiad</button><button id="print">Drukuj A4</button><button id="docx">DOCX</button><button id="send">E-mail (archiwum)</button></div>
+ <div class="noprint repb"><button id="ai" class="kb aimain">WYŚLIJ DO AI (ChatGPT / Claude / Grok)</button><button id="aiPrev" class="tb">Podgląd tekstu dla AI</button><button id="pdf" class="tr">PDF</button><button id="docx" class="tg">DOCX</button><button id="print" class="ta">Drukuj A4</button><button id="wywR" class="tb">Wywiad</button><button id="send" class="tn">E-mail (archiwum)</button><button id="back" class="tn">← Start</button><button id="copy" class="hide">Kopiuj</button></div>
  <div id="rep"></div>
 </section>
 <section id="settings" class="scr"><div class="noprint row"><button data-s="home">← Start</button></div><h2>Ustawienia</h2>
