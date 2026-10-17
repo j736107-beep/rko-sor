@@ -5,7 +5,7 @@
 (function(root){
 const Cap=root.Capacitor,isNative=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
 const plug=n=>isNative&&Cap.Plugins?Cap.Plugins[n]:null;
-const PREFIX=['Zmniejszam. Ustaw pompę','Zwiększam. Ustaw pompę','Utrzymaj. Pompa','Ustaw pompę','Średnie ciśnienie wynosi','Zapisano:'];
+const PREFIX=['Zmniejszam. Ustaw pompę','Zwiększam. Ustaw pompę','Utrzymaj. Pompa','Ustaw pompę','Średnie ciśnienie tętnicze','Zapisano:'];
 const GAP=0.12,CACHE_MAX=220;
 // v1.9.2: każde oczekiwanie ma limit czasu – lektor nigdy nie „wisi” (zawieszony stan mówienia blokował mikrofon i testy)
 const TO=(p,ms)=>Promise.race([Promise.resolve(p).catch(()=>{}),new Promise(r=>setTimeout(r,ms))]);
@@ -56,7 +56,7 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
    catch(e){V.stats.fallback++}}
   for(const f of list){if(V._cut)return;if(f)await V._clip(f);else await new Promise(r=>setTimeout(r,GAP*1000))}},
  _clip(f){return new Promise(res=>{const a=V.audio;let done=false;const fin=()=>{if(!done){done=true;res()}};a.onended=fin;a.onerror=fin;a.src='audio/'+f;a.play().catch(fin);setTimeout(fin,15000)})},
- async _tts(t){V.stats.tts++;const T=plug('TextToSpeech');if(T){return TO(T.speak({text:t,lang:'pl-PL',rate:0.95,pitch:0.95,volume:1,category:'playback'}),Math.max(4000,t.length*120))}
+ async _tts(t){V.stats.tts++;if(root.RKO&&root.RKO.sayify)t=root.RKO.sayify(t);const T=plug('TextToSpeech');if(T){return TO(T.speak({text:t,lang:'pl-PL',rate:0.95,pitch:0.95,volume:1,category:'playback'}),Math.max(4000,t.length*120))}
   if(!root.speechSynthesis)return;return new Promise(res=>{const u=new SpeechSynthesisUtterance(t);u.lang='pl-PL';u.rate=.95;const vs=speechSynthesis.getVoices().filter(v=>/^pl/i.test(v.lang));u.voice=vs.find(v=>/zofia|female|kobieta|paulina|ewa/i.test(v.name))||vs[0]||null;u.onend=res;u.onerror=res;speechSynthesis.speak(u);setTimeout(res,12000)})},
  alarm(){try{const c=V.ctx||(V.ctx=new (root.AudioContext||root.webkitAudioContext)());for(let i=0;i<3;i++){const o=c.createOscillator(),g=c.createGain();o.type='square';o.frequency.value=880;g.gain.value=.25;o.connect(g);g.connect(c.destination);o.start(c.currentTime+i*.35);o.stop(c.currentTime+i*.35+.2)}}catch(e){}if(navigator.vibrate)navigator.vibrate([300,100,300])}};
 // ---- rozpoznawanie mowy (v1.7) ----

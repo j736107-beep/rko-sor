@@ -54,11 +54,11 @@ $('#heard').textContent='mikrofon: '+[].concat(alts)[0];const before=E.s.cur&&E.
 $$('.fb [data-c],.fb2 [data-c]').forEach(b=>b.onclick=()=>{Ears.addLog('przycisk',b.dataset.c);press(b,b.dataset.c);handle([b.dataset.c],true,null,'przycisk')});
 // v1.8: przyciski kontekstowe – do bieżącego pytania lektora; kolor aktywny do przyjęcia komendy / następnego kroku
 const PS=new RKO.PressState();let ctxKey=null;
-function press(el,c){PS.press(c,Date.now());el.classList.add('act');setTimeout(()=>{el.classList.remove('act')},900)}
+function press(el,c){PS.press(c,Date.now());document.querySelectorAll('button.exp').forEach(b=>b.classList.remove('exp'));el.classList.add('act');setTimeout(()=>{el.classList.remove('act')},900)}
 function renderCtx(force){const box=$('#ctxb');if(!box||!E)return;const key=RKO.btnKey(E.s),act=PS.sync(key,Date.now());
  if(force||key!==ctxKey){ctxKey=key;const L=RKO.buttonsFor(E.s);box.className='ctxb n'+Math.min(L.length,5);box.innerHTML='';
   L.forEach(x=>{const b=document.createElement('button');b.textContent=x.label;b.dataset.c=x.c;if(x.cls)b.classList.add('k'+x.cls);
-   b.onclick=()=>{press(b,x.c);Ears.addLog('przycisk',x.c);if(x.c==='#num'){$('#numB').click();return}setTimeout(()=>{handle([x.c],true,null,'przycisk');renderCtx()},120)};box.appendChild(b)})}
+   b.onclick=()=>{press(b,x.c);Ears.addLog('przycisk',x.c);if(x.c==='#num'){$('#numB').click();return}setTimeout(()=>{handle([x.c],true,null,'przycisk');renderCtx()},120)};box.appendChild(b)});const ex=RKO.expectedBtn(E.s);if(ex){const eb=[...box.querySelectorAll('button')].find(b=>b.dataset.c===ex);if(eb)eb.classList.add('exp')}}
  renderRhy(act);box.querySelectorAll('button').forEach(b=>b.classList.toggle('act',act!=null&&b.dataset.c===act))}
 // v1.9: skróty rytmu zawsze widoczne w NZK
 let rhyKey=null;function renderRhy(act){const box=$('#rhyb');if(!box||!E)return;const L=RKO.rhyButtons(E.s);const k=L.length+'|'+E.s.mode;if(k!==rhyKey){rhyKey=k;box.innerHTML='';box.classList.toggle('hide',!L.length);

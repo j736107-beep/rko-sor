@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). */
 (function(root){
 'use strict';
-const VERSION='1.9.3';
+const VERSION='1.9.4';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -15,14 +15,14 @@ const BINT={iso:150000,adrinf:150000,dopa:300000};
 const BINF={iso:{name:'izoprenalina',mg:1,ml:50,unit:'min',start:1*5,step:1,max:20},adrinf:{name:'adrenalina we wlewie',mg:1,ml:50,unit:'min',start:2,step:1,max:10},dopa:{name:'dopamina (poza ERC – lokalny standard)',mg:200,ml:50,unit:'kgmin',start:5,step:2,max:10}};
 function binfConc(d,o){const c=Object.assign({},BINF[d],(o||{})[d]||{});c.conc=c.mg*1000/c.ml;return c}
 function binfMlh(d,dose,kg,o){const c=binfConc(d,o);return r1(c.unit==='kgmin'?dose*kg*60/c.conc:dose*60/c.conc)}
-function binfPrep(d,o,sayConc){const c=binfConc(d,o);if(d==='adrinf'){const ml=c.mg===1?'1 mililitr':c.mg+' mililitry';return 'Wlew adrenaliny. Weź '+(c.mg===1?'1 miligram':c.mg+' miligramy')+' adrenaliny, czyli '+ml+' z ampułki. Dociągnij solą fizjologiczną do '+c.ml+' mililitrów.'+(sayConc===false?'':' Stężenie '+Math.round(c.conc)+' mikrogramów na mililitr.')}const mgw=c.mg===1?'1 miligram':c.mg+' miligramów';return (d==='iso'?'Izoprenalina':d==='dopa'?'Dopamina':'Adrenalina we wlewie')+': '+mgw+' dociągnij solą fizjologiczną do '+c.ml+' mililitrów.'}
+function binfPrep(d,o,sayConc){const c=binfConc(d,o);if(d==='adrinf'){const ml=volW(c.mg);return 'Wlew adrenaliny. Weź '+mgW(c.mg)+' adrenaliny, czyli '+ml+' z ampułki. Dociągnij solą fizjologiczną do '+c.ml+' mililitrów.'+(sayConc===false?'':' Stężenie '+Math.round(c.conc)+' mikrogramów na mililitr.')}const mgw=mgW(c.mg);return (d==='iso'?'Izoprenalina':d==='dopa'?'Dopamina':'Adrenalina we wlewie')+': '+mgw+' dociągnij solą fizjologiczną do '+c.ml+' mililitrów.'}
 function dobuMlh(dose,kg){return r1(dose*kg*60/DOBU.conc)}
 const ADRINF={mg:1,ml:50,conc:20}; // µg/ml, bradykardia 2–10 µg/min
 function adrInfMlh(ugmin){return r1(ugmin*60/ADRINF.conc)}
 function volW(x){x=r1(x);return x===0.5?'pół mililitra':fmt1(x)+' '+mlWord(x)}
 function volGen(x){x=r1(x);return x===0.5?'pół mililitra':fmt1(x)+' '+(Number.isInteger(x)&&x!==1?'mililitrów':'mililitra')}
 function rangeW(a,b){return (r1(a)===0.5?'pół':fmt1(a))+' do '+volGen(b)}
-function mgW(x){return x===0.5?'pół miligrama':x===1?'1 miligram':fmt1(x)+' miligrama'}
+function mgW(x){x=r1(x);return x===0.5?'pół miligrama':Number.isInteger(x)?x+' '+plN(x,'miligram','miligramy','miligramów'):fmt1(x)+' miligrama'}
 function atroText(dose,amp){dose=dose||.5;amp=amp||.5;return 'Podaj atropinę '+mgW(dose)+', czyli '+volW(dose/amp)+'. Powiedz: tak.'}
 function atroNext(dose,amp){dose=dose||.5;amp=amp||.5;return 'Kolejna dawka atropiny '+mgW(dose)+', czyli '+volW(dose/amp)+'. Powiedz: tak.'}
 function sedText(o){const f=o.fentConc||50,ma=o.midaAmpMg||5,mc=o.midaConc||1,mac=(o.midaAmpMg||5)/(o.midaAmpMl||1);
@@ -34,6 +34,42 @@ function midaRepText(o){const mc=o.midaConc||1;return 'Jeśli potrzeba, midazola
 function fentWarn(o){return 'Uwaga: łączna dawka fentanylu powyżej '+volGen(100/(o.fentConc||50))+'. Ryzyko depresji oddechu, przygotuj worek i nalokson.'}
 function mapOf(s,d){return Math.round((s+2*d)/3)}
 function noraTable(){const out=[];for(let kg=50;kg<=120;kg+=10)out.push({kg,s50:noraMlh(.05,kg,50),s20:noraMlh(.05,kg,20)});return out}
+// ---------- v1.9.4: liczebniki słownie z odmianą (lektor) ----------
+const NW1=['zero','jeden','dwa','trzy','cztery','pięć','sześć','siedem','osiem','dziewięć','dziesięć','jedenaście','dwanaście','trzynaście','czternaście','piętnaście','szesnaście','siedemnaście','osiemnaście','dziewiętnaście'];
+const NW10=['','','dwadzieścia','trzydzieści','czterdzieści','pięćdziesiąt','sześćdziesiąt','siedemdziesiąt','osiemdziesiąt','dziewięćdziesiąt'];
+const NW100=['','sto','dwieście','trzysta','czterysta','pięćset','sześćset','siedemset','osiemset','dziewięćset'];
+const NG1=['zera','jednego','dwóch','trzech','czterech','pięciu','sześciu','siedmiu','ośmiu','dziewięciu','dziesięciu','jedenastu','dwunastu','trzynastu','czternastu','piętnastu','szesnastu','siedemnastu','osiemnastu','dziewiętnastu'];
+const NG10=['','','dwudziestu','trzydziestu','czterdziestu','pięćdziesięciu','sześćdziesięciu','siedemdziesięciu','osiemdziesięciu','dziewięćdziesięciu'];
+const NG100=['','stu','dwustu','trzystu','czterystu','pięciuset','sześciuset','siedmiuset','ośmiuset','dziewięciuset'];
+function plN(n,one,few,many){if(n===1)return one;const d=n%10,dd=n%100;return d>=2&&d<=4&&!(dd>=12&&dd<=14)?few:many}
+// n całkowite 0..999999; gen – dopełniacz; fem – rodzaj żeński (jedna/dwie)
+function numWords(n,gen,fem){if(n===0)return gen?'zera':'zero';const out=[];
+ const th=Math.floor(n/1000),r=n%1000;
+ if(th){if(th===1)out.push(gen?'tysiąca':'tysiąc');else out.push(numWords(th,gen,false)+' '+(gen?'tysięcy':plN(th,'tysiąc','tysiące','tysięcy')))}
+ if(r){const h=Math.floor(r/100),t=r%100;if(h)out.push((gen?NG100:NW100)[h]);
+  if(t){let w;if(t<20)w=(gen?NG1:NW1)[t];else{w=(gen?NG10:NW10)[Math.floor(t/10)];if(t%10)w+=' '+(gen?NG1:NW1)[t%10]}
+   if(fem){if(!gen){w=w.replace(/\bdwa$/,'dwie');if(t===1&&!h&&!th)w='jedna'}else if(t===1&&!h&&!th)w='jednej'}
+   out.push(w)}}
+ return out.join(' ')}
+const ADJP={1:'jedno',2:'dwu',3:'trzy',4:'cztero',5:'pięcio',10:'dziesięcio',12:'dwunasto',15:'piętnasto',20:'dwudziesto',40:'czterdziesto',50:'pięćdziesięcio'};
+const GENPREP=/^(do|od|powyżej|poniżej|przy|z|ze|bez|około|wokół|spośród)$/i;
+const FEMN=/^(minut|sekund|godzin|ampuł|kropl|dawk|doby|dób|jednost|strzykaw)/i;
+function decWords(s){const[a,b]=s.split(',');return numWords(+a)+' przecinek '+(b.length===1||b[0]==='0'?b.split('').map(d=>NW1[+d]).join(' '):numWords(+b))}
+function sayify(text){let t=String(text);
+ t=t.replace(/\bEtCO₂|\bETCO2\b/g,'dwutlenek węgla w wydechu').replace(/\bCO₂|\bCO2\b/g,'dwutlenek węgla').replace(/\bSpO₂/g,'saturacja')
+  .replace(/\s*mmHg\b/g,'').replace(/\bMAP\b/g,'średnie ciśnienie tętnicze').replace(/(\d)\s*µg\b/g,'$1 mikrogramów').replace(/(\d)\s*mg\b/g,'$1 miligramów').replace(/(\d)\s*ml\b/g,'$1 mililitrów');
+ // przymiotniki procentowe: 5% glukozy / glukoza 5% / 12-odprowadzeniowe
+ t=t.replace(/(\d+,\d+)%/g,'$1 procent');t=t.replace(/(\d+)% (glukoz\w*)/g,(m,n,g)=>ADJP[n]?ADJP[n]+'procentow'+(g==='glukozy'?'ej':g==='glukozę'?'ą':'a')+' '+g:m)
+  .replace(/(glukoz\w*) (\d+)%/g,(m,g,n)=>ADJP[n]?g+' '+ADJP[n]+'procentow'+(g==='glukozy'?'ej':'a'):m)
+  .replace(/(\d+,\d+)-procentow\w+/g,'$1 procent').replace(/(^|[^\d,])(\d+)-(procentow|odprowadzeniow)(\w+)/g,(m,p0,n,a,e)=>ADJP[n]?p0+ADJP[n]+a+e:m).replace(/(\d+(?:,\d+)?)%/g,'$1 procent');
+ // liczby z kontekstem
+ return t.replace(/\d+(?:,\d+)?/g,(num,off,all)=>{
+  if(num.includes(','))return decWords(num);const n=+num;
+  const before=all.slice(0,off).trim().split(/\s+/).pop()||'';const after=(all.slice(off+num.length).match(/^\s+([^\s.,;:?!]+)/)||[])[1]||'';
+  // „N do M <rzecz>”: pierwsza liczba też odnosi się do rzeczownika po M
+  let noun=after;if(/^do$/i.test(after)){const mm=all.slice(off+num.length).match(/^\s+do\s+\d+(?:,\d+)?\s+([^\s.,;:?!]+)/);if(mm)noun=mm[1]}
+  const gen=GENPREP.test(before.replace(/[^\wąćęłńóśźż]/gi,''));const fem=FEMN.test(noun);
+  return numWords(n,gen,fem)}).replace(/(^|[.?!]\s+)([a-ząćęłńóśźż])/g,(m,a,b)=>a+b.toUpperCase())}
 // ---------- rozpoznawanie ----------
 function norm(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ł/g,'l').replace(/[.,!?;:"'„”]/g,' ').replace(/\s+/g,' ').trim()}
 const UN={zero:0,jeden:1,jedna:1,jedno:1,dwa:2,dwie:2,trzy:3,cztery:4,piec:5,szesc:6,siedem:7,osiem:8,dziewiec:9,dziesiec:10,jedenascie:11,dwanascie:12,trzynascie:13,czternascie:14,pietnascie:15,szesnascie:16,siedemnascie:17,osiemnascie:18,dziewietnascie:19};
@@ -184,7 +220,7 @@ const SAY={
  noraPrep50:'Noradrenalina: 4 ampułki po 1 miligramie dociągnij solą fizjologiczną do 50 mililitrów w strzykawce 50.',
  noraPrep20:'Noradrenalina: 2 ampułki po 1 miligramie dociągnij solą fizjologiczną do 20 mililitrów w strzykawce 20.',
  setPump:'Ustaw pompę',upPump:'Zwiększam. Ustaw pompę',keepPump:'Utrzymaj. Pompa',
- mapIs:'Średnie ciśnienie wynosi',
+ mapIs:'Średnie ciśnienie tętnicze',
  noraHigh:'Wysoka dawka noradrenaliny. Wezwij anestezjologa. Rozważ drugi lek i przyczynę.',
  lowOut:'Czy są objawy niskiego rzutu: słaby tętno, zimne kończyny, wydłużony powrót kapilarny?',
  dobuPrep:'Dobutamina: 250 miligramów dociągnij solą fizjologiczną do 50 mililitrów w strzykawce 50.',
@@ -656,6 +692,8 @@ function buttonsFor(s){if(!s||s.mode==='idle'||s.mode==='ended')return [];const 
  if(NUMQ.includes(c.id))return [B('LICZBA','#num'),B('POMIŃ','dalej')];
  if(/\?/.test(c.text))return [B('TAK','tak','b'),B('NIE','nie','n')];
  return [B('TAK','tak','b')]}
+// v1.9.4: przycisk oczekiwany teraz (pulsuje) – pierwszy przycisk bieżącego pytania
+function expectedBtn(s){if(!s||!s.cur)return null;const L=buttonsFor(s);return L.length?L[0].c:null}
 function btnKey(s){return s?(s.mode+'|'+(s.cur?s.cur.id+'|'+s.cur.text:'-')+'|'+(s.log?s.log.length:0)):''}
 // stan wciśnięcia: kolor aktywny do przyjęcia komendy / zmiany kroku, maks. 900 ms bez zmiany – nigdy nie zostaje
 function PressState(){this.key=null;this.act=null;this.t=0}
@@ -672,6 +710,6 @@ function anonymize(t){return String(t||'')
  .replace(/\b\d{2}-\d{3}\b/g,'[kod usunięty]')
  .replace(/\b(ul\.|ulica|ulicy|al\.|aleja|alei|os\.|osiedle|osiedlu|pl\.|plac|placu|zam\.|zamieszkał[ya]?|zamieszkała)\s+[^\n,;.]*/gi,'[adres usunięty]')
  .replace(/\b([Pp]an|[Pp]ani|[Pp]acjent|[Pp]acjentka|[Nn]azwisko|[Ii]mię)\s*:?\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+(\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)?/g,(m,a)=>a+' [dane usunięte]')}
-const API={anonymize,AI_PROMPT,buttonsFor,rhyButtons,RHY,adrText,RHY_NAME,labOf,btnKey,PressState,BTN,lev,fuzzyMatch,FUZZY,roscRhyOf,echoOf,BARGE_MIN,minText,insText,HK_GLU,amioDrip,amioDripSay,numW,amioCalc,amioSay,amioCount,hepCalc,hepBolusText,hepPrepText,HEPB,parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
+const API={mgW,expectedBtn,sayify,numWords,anonymize,AI_PROMPT,buttonsFor,rhyButtons,RHY,adrText,RHY_NAME,labOf,btnKey,PressState,BTN,lev,fuzzyMatch,FUZZY,roscRhyOf,echoOf,BARGE_MIN,minText,insText,HK_GLU,amioDrip,amioDripSay,numW,amioCalc,amioSay,amioCount,hepCalc,hepBolusText,hepPrepText,HEPB,parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
 if(typeof module!=='undefined')module.exports=API;else root.RKO=API;
 })(this);

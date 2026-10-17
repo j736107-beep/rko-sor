@@ -52,3 +52,26 @@ h2,h3{font-weight:600;letter-spacing:.3px}
 .strow.fail{border-left-color:var(--red);background:var(--redT)}.strow.fail .stat{color:var(--alarm)}.strow.skip .stat{color:var(--warn)}
 .stsum{background:var(--p1);border:1px solid var(--bd);border-left:6px solid var(--gry);padding:10px;border-radius:8px;font-size:13px}.stsum.pass{border-left-color:var(--grn)}.stsum.fail{border-left-color:var(--red)}
 .aimain{flex-basis:100%!important;font-size:18px;padding:16px}
+
+/* v1.9.4: wszystko mieści się w panelu na wąskich ekranach (360–412 dp), także przy powiększonej czcionce */
+html,body{max-width:100%;overflow-x:hidden}
+button{min-width:0;max-width:100%;overflow-wrap:anywhere;hyphens:auto}
+.row>*,.ctxb>*,.rhyb>*,.fb>*,.fb2>*,.padg>*{min-width:0}
+.ctxb{grid-template-columns:repeat(2,minmax(0,1fr))}.ctxb.n1{grid-template-columns:minmax(0,1fr)}.ctxb.n3,.ctxb.n5{grid-template-columns:repeat(2,minmax(0,1fr))}
+.ctxb button{font-size:clamp(1rem,5.4vw,1.4rem);min-height:68px;padding:8px 4px}.ctxb.n1 button{font-size:clamp(1.3rem,7vw,2rem);min-height:84px}
+.rhyb{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.rhyb button{font-size:clamp(10px,3vw,15px);overflow-wrap:normal;hyphens:none;padding:12px 1px;letter-spacing:0}
+.fb,.fb2{grid-template-columns:repeat(3,minmax(0,1fr))}.fb button,.fb2 button{font-size:clamp(11px,3.5vw,14px);padding:11px 2px}
+.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}.mid{font-size:clamp(20px,7.5vw,30px)}.lbl{font-size:10px;letter-spacing:.8px}
+.big{font-size:min(22vw,120px)}
+.pad{left:0;right:0;width:100%;padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:40}
+.padg{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;max-width:420px;margin:0 auto}.padg button{font-size:22px;padding:9px 0;min-height:46px}
+#padv{font-size:30px;line-height:1.2}
+.mbox{width:min(92vw,520px)}.strow .ans{display:flex;gap:6px}.strow .ans button{min-width:0}
+.undo{flex-wrap:wrap}.undo span{min-width:0;overflow-wrap:anywhere}
+/* v1.9.4: oczekiwany przycisk delikatnie pulsuje (zatrzymuje się po naciśnięciu) */
+@keyframes expPulse{0%,100%{box-shadow:0 0 0 0 rgba(143,184,230,0);filter:none}50%{box-shadow:0 0 0 4px rgba(143,184,230,.35);filter:brightness(1.18)}}
+button.exp{animation:expPulse 1.6s ease-in-out infinite}
+button.kr.exp,button.r.exp{--pc:rgba(224,82,82,.35)}button.kg.exp{--pc:rgba(95,201,141,.35)}button.ka.exp{--pc:rgba(226,180,67,.35)}
+button.exp[class*="k"]{animation-name:expPulse2}@keyframes expPulse2{0%,100%{box-shadow:0 0 0 0 transparent;filter:none}50%{box-shadow:0 0 0 4px var(--pc,rgba(143,184,230,.35));filter:brightness(1.18)}}
+button.act{animation:none!important}
+@media (prefers-reduced-motion:reduce){button.exp{animation:none;outline:2px solid #8fb8e6;outline-offset:1px}}
