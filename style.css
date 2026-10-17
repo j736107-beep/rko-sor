@@ -23,3 +23,8 @@ label{display:block;margin:10px 0}input,select{display:block;width:100%;font:inh
 .said .old{opacity:.55;font-size:14px}
 
 .scenbtn{display:flex;gap:10px;margin:10px 0}.scenbtn button{flex:1;font-size:2rem;font-weight:800;padding:28px 6px;border-radius:14px;background:#1f6feb;color:#fff;border:0}.scenbtn.hide{display:none}.ears.on{background:#1a7f37;color:#fff;border-radius:8px;padding:2px 8px}.heard{font-size:1.05rem;min-height:1.4em}
+/* v1.7: duże przyciski rytmu i TAK, log mikrofonu */
+.bigb{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
+.bigb button{font-size:1.35rem;font-weight:800;padding:18px 4px;min-height:64px}
+.bigb button.tak{grid-column:1 / -1;font-size:1.8rem;min-height:72px}
+.rawlog{font:12px/1.3 monospace;opacity:.8;white-space:pre-wrap;max-height:6.6em;overflow:hidden;margin:4px 0}
