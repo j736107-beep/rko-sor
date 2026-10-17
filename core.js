@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). Autor: Wujek Fido. */
 (function(root){
 'use strict';
-const VERSION='1.9';
+const VERSION='1.9.1';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -343,7 +343,7 @@ P.answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd
  case 'pulse':if(yes||c==='pulse'){this.newCycle();this.toRosc()}else if(no||c==='nopulse'||(def&&D==='nopulse')){if(def)this.say(SAY.pulseNo,'alarm');this.noteInit('nopulse','PEA');this.setRhythm(false,'PEA')}else if(c==='shockable'||c==='nonshock'){this.onRhythmCmd(c)}else return false;break;
  case 'shock':if(yes||c==='shock_done')this.shockDone();else if(no){this.newCycle(SAY.cont)}else return false;break;
  case 'adr':if(yes||c==='adr')this.giveAdr();else return false;break;
- case 'amio':if(c==='lido')this.giveAmio(true);else if(yes||c==='amio')this.giveAmio(false);else return false;break;
+ case 'amio':if(no){this.log('lek','Amiodaron/lidokaina – nie podano');break}if(c==='lido')this.giveAmio(true);else if(yes||c==='amio')this.giveAmio(false);else return false;break;
  case 'torsade':if(yes){this.log('rytm','Torsade de pointes');this.ask('mag',SAY.mag)}else if(no||def){}else return false;break;
  case 'mag':if(yes){this.log('lek','Siarczan magnezu 2 g',{drug:'siarczan magnezu',dose:'2 g'});this.say(SAY.logged+' magnez.','ack')}else return false;break;
  case 'intubQ':if(yes){s.airway='intubacja (planowana)';this.log('drogi oddechowe','Pewny w intubacji – intubacja');this.say(SAY.intubYes)}
@@ -547,6 +547,8 @@ P._input=function(alts){const s=this.s;const r=interpret(alts,this.ctx());s.hear
  if(s.paused&&(r.cmd==='next'||r.cmd==='yes')){s.paused=false;this.say(SAY.resumed);this.pump();return 'resume'}
  const c=s.cur;if(!c){return r.cmd}
  let ok=this.answer(c,r);
+ // v1.9.1: NIE zawsze zamyka pytanie TAK/NIE (zapis w raporcie), nigdy „nie rozpoznano”
+ if(!ok&&r.cmd==='no'&&/\?/.test(c.text)){this.log('odpowiedź','NIE – '+c.text.replace(/\s+/g,' ').slice(0,70));ok=true}
  // rytm po ROSC jest opcjonalny: liczba (np. ciśnienie) zamyka pytanie i trafia do kolejnego
  if(!ok&&c.id==='roscRhy'&&(r.num!=null||r.cmd==='next'||r.cmd==='no')){this.log('rytm','Rytm po ROSC: nie podano');s.cur=null;this.pump();if(r.num!=null&&s.cur){const c2=s.cur;if(this.answer(c2,r)){if(s.cur===c2)s.cur=null;this.pump()}}return r.cmd}
  if(ok){s.unmatched=null;if(s.cur===c)s.cur=null;this.pump()}else{c.at=this.now();s.unmatched=r.text||'';return 'unmatched'}
@@ -631,19 +633,19 @@ function staticPhrases(){const a=new Set(Object.values(SAY).filter(Boolean));Obj
  Object.values(SAY).forEach(t=>a.add(SAY.remind+' '+t));return [...a].filter(Boolean)}
 // ---------- v1.8: przyciski kontekstowe do bieżącego kroku ----------
 const B=(label,c,cls)=>({label,c,cls:cls||''});
-const RHY=[B('VF','migotanie komór','r'),B('pVT','częstoskurcz bez tętna','r'),B('ASYSTOLIA','asystolia'),B('PEA','PEA'),B('TĘTNO','tętno','g')];
-const BTN={rhythm:[B('TAK','tak','g'),B('NIE','nie')],
- roscRhy:[B('TAK','tak','g'),B('NIE','nie'),B('ZATOKOWY','zatokowy'),B('MIG. PRZEDS.','migotanie przedsionków'),B('INNY','inny')],
- roscAf:[B('TAK','tak','g'),B('NIE','nie')],rhyAsy:[B('TAK','tak','g'),B('NIE','nie')],pulse:[B('TAK – TĘTNO','tak','g'),B('NIE','nie')],
- shock:[B('WYŁADOWANO','wyładowano','r'),B('NIE','nie')],amio:[B('TAK – AMIODARON','tak'),B('LIDOKAINA','lidokaina podano')],
- ht:[B('TAK','tak','g'),B('NIE','nie'),B('DALEJ','dalej')],syr:[B('50 ml','50'),B('20 ml','20')],
+const RHY=[B('VF','migotanie komór','r'),B('pVT','częstoskurcz bez tętna','r'),B('ASYSTOLIA','asystolia','a'),B('PEA','PEA','a'),B('TĘTNO','tętno','g')];
+const BTN={rhythm:[B('TAK','tak','b'),B('NIE','nie','n')],
+ roscRhy:[B('TAK','tak','b'),B('NIE','nie','n'),B('ZATOKOWY','zatokowy'),B('MIG. PRZEDS.','migotanie przedsionków'),B('INNY','inny')],
+ roscAf:[B('TAK','tak','b'),B('NIE','nie','n')],rhyAsy:[B('TAK','tak','b'),B('NIE','nie','n')],pulse:[B('TAK – TĘTNO','tak','g'),B('NIE','nie','n')],
+ shock:[B('WYŁADOWANO','wyładowano','r'),B('NIE','nie','n')],amio:[B('TAK – AMIODARON','tak','b'),B('LIDOKAINA','lidokaina podano'),B('NIE','nie','n')],
+ ht:[B('TAK','tak','b'),B('NIE','nie','n'),B('DALEJ','dalej')],syr:[B('50 ml','50'),B('20 ml','20')],
  hepQ:[B('ZATOROWOŚĆ','zatorowość'),B('OZW','OZW')],acDrug:[B('DOAC','doac'),B('WARFARYNA','warfaryna'),B('HEPARYNA','heparyna'),B('NIE WIEM','nie wiem')],
  bradyDrug:[B('IZOPRENALINA','izoprenalina'),B('DOPAMINA','dopamina'),B('ADRENALINA WLEW','wlew adrenaliny')],which:[B('NORADRENALINA','noradrenalina'),B('DOBUTAMINA','dobutamina'),B('WLEW W BRADYKARDII','wlew')],
  decExc:[B('NIE – BRAK WYJĄTKÓW','nie'),B('HIPOTERMIA','hipotermia'),B('ZATRUCIE','zatrucie'),B('TROMBOLIZA','tromboliza'),B('ECPR','ecpr')],
- decEnd:[B('TAK, ZAKOŃCZ','tak, zakończ','r'),B('NIE – KONTYNUUJ','nie')],endQ:[B('TAK, ZAKOŃCZ','tak, zakończ','r'),B('NIE','nie')],
+ decEnd:[B('TAK, ZAKOŃCZ','tak, zakończ','r'),B('NIE – KONTYNUUJ','nie')],endQ:[B('TAK, ZAKOŃCZ','tak, zakończ','r'),B('NIE','nie','n')],
  pocusQ:[B('CZYNNOŚĆ OBECNA','jest czynność'),B('BRAK CZYNNOŚCI','brak czynności'),B('NIE WYKONANO','nie wykonano')],
  amioCvc:[B('CENTRALNIE','centralnie'),B('OBWODOWO','obwodowo')],amioCnt:[B('0','zero'),B('1 raz','jeden raz'),B('2 razy','dwa')],
- acQ:[B('TAK','tak','g'),B('NIE','nie'),B('NIE WIEM','nie wiem')],inrQ:[B('LICZBA','#num'),B('NIE WIEM','nie wiem')],hepLast:[B('LICZBA (h)','#num'),B('NIE WIEM','nie wiem')],gluPre:[B('LICZBA','#num'),B('NIE WIEM','nie wiem')],
+ acQ:[B('TAK','tak','b'),B('NIE','nie','n'),B('NIE WIEM','nie wiem')],inrQ:[B('LICZBA','#num'),B('NIE WIEM','nie wiem')],hepLast:[B('LICZBA (h)','#num'),B('NIE WIEM','nie wiem')],gluPre:[B('LICZBA','#num'),B('NIE WIEM','nie wiem')],
  weight:[B('LICZBA (kg)','#num'),B('NIE WIEM','nie wiem')],usgRes:[B('POMIŃ','dalej')]};
 const NUMQ=['etco2','sys','dia','spo2','temp','glu','gcs','tube','mins','zrmAdr','zrmShk','zrmAmio','hkGlu','hkK','fentGo','midaGo','fentRep','midaRep','bHR','bSBP'];
 function rhyButtons(s){return s&&s.mode==='arrest'?RHY.slice():[]}
@@ -651,8 +653,8 @@ function buttonsFor(s){if(!s||s.mode==='idle'||s.mode==='ended')return [];const 
  if(!c){return s.mode==='arrest'?[]:[B('ZWIĘKSZ','zwiększ'),B('UTRZYMAJ','utrzymaj'),B('ZATRZYMANIE','zatrzymanie','r')]}
  if(BTN[c.id])return BTN[c.id].slice();
  if(NUMQ.includes(c.id))return [B('LICZBA','#num'),B('POMIŃ','dalej')];
- if(/\?\s*$/.test(c.text))return [B('TAK','tak','g'),B('NIE','nie')];
- return [B('TAK','tak','g')]}
+ if(/\?/.test(c.text))return [B('TAK','tak','b'),B('NIE','nie','n')];
+ return [B('TAK','tak','b')]}
 function btnKey(s){return s?(s.mode+'|'+(s.cur?s.cur.id+'|'+s.cur.text:'-')+'|'+(s.log?s.log.length:0)):''}
 // stan wciśnięcia: kolor aktywny do przyjęcia komendy / zmiany kroku, maks. 900 ms bez zmiany – nigdy nie zostaje
 function PressState(){this.key=null;this.act=null;this.t=0}

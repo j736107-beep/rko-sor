@@ -110,7 +110,7 @@ function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')ret
  let nx='—',due=false;
  if(s.mode==='arrest'){if(s.adrDue){const l=s.adrDue-now;due=l<=0;nx='Adrenalina 1 mg '+(due?'TERAZ':'za '+mmss(l))}else nx='Adrenalina: przy rytmie niedefibrylacyjnym od razu, VF po 3. wyładowaniu'}
  if(s.mode==='rosc'){nx=s.nora?'Noradrenalina '+RKO.fmt1(s.nora.mlh)+' ml/h':'Pętla ciśnienia';if(s.dobu)nx+=' · dobutamina '+RKO.fmt1(s.dobu.mlh)+' ml/h';if(s.lastMap!=null)nx+=' · MAP '+s.lastMap;if(s.nextMap)nx+=' · pomiar za '+mmss(s.nextMap-now)}
- if(s.cur)nx+='\n❓ '+s.cur.text.slice(0,70);
+ if(s.cur)nx+='\n▸ '+s.cur.text.slice(0,70);
  if(s.sim&&s.mode==='arrest')nx='Monitor (symulacja): '+(s.simRhythm||'?')+'\n'+nx;
  $('#next').textContent=nx;$('#next').classList.toggle('due',due);renderCtx();renderUndo()}
 function finished(){clearInterval(timer);Metro.want=false;Metro.cut();Ears.stop();wake(false);nat('action',{on:false});nat('pin',{on:false});const s=E.s;LS.set('rko_cur',null);
@@ -170,6 +170,12 @@ $('#pin').value=cfg.pin||'0';$('#pin').onchange=()=>{cfg.pin=$('#pin').value;LS.
 $('#licCopy').onclick=copyId;$('#licCopy2').onclick=copyId;
 $('#licGo').onclick=()=>{const c=$('#licCode').value.trim();const v=LIC.verify(c,instId,LIC.APPS.RKO);if(!v.ok){$('#licRes').textContent='✗ '+v.reason;return}LS.set('rko_code',c);licCheck();$('#licRes').textContent=LICS.full?'✓ aktywowano':'✗ kod wygasł';$('#licCode').value=''};
 licCheck();
+// v1.9.1: licencja, numer instalacji i ustawienia kopiowane do pamięci natywnej; po aktualizacji odtwarzane, jeśli WebView je zgubił
+const KEEP=['rko_inst','rko_code','rko_maxseen','rko_cfg'];
+(async()=>{const N=NAT();if(!N||!N.kvGet)return;let changed=false;for(const k of KEEP){try{const loc=localStorage.getItem(k);const r=await N.kvGet({k});
+ if(r&&r.v!=null&&(loc==null||(k==='rko_inst'&&loc!==r.v))){localStorage.setItem(k,r.v);changed=true}else if(loc!=null&&(!r||r.v!==loc))await N.kvSet({k,v:loc})}catch(e){}}
+ if(changed){instId=LS.get('rko_inst',instId);Object.assign(cfg,LS.get('rko_cfg',{}));licCheck()}})();
+{const _set=LS.set;LS.set=(k,v)=>{_set(k,v);if(KEEP.includes(k)){const N=NAT();if(N&&N.kvSet)N.kvSet({k,v:JSON.stringify(v)}).catch(()=>{})}}}
 // v1.9: sprawdzenie aktualizacji (GitHub releases) – tylko baner
 function verNum(v){return String(v||'').replace(/^v/i,'').split('.').map(n=>+n||0)}
 function newer(a,b){const x=verNum(a),y=verNum(b);for(let i=0;i<Math.max(x.length,y.length);i++){if((x[i]||0)!==(y[i]||0))return (x[i]||0)>(y[i]||0)}return false}

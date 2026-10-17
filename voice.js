@@ -28,25 +28,29 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
   if(!done)out.push({tts:s})}
   // scal kolejne zdania z nagrań w jedną sekwencję (bez przerw między plikami)
   const m=[];for(const x of out){const l=m[m.length-1];if(x.clips&&l&&l.clips){l.clips.push(null,...x.clips)}else m.push(x.clips?{clips:x.clips.slice()}:x)}return m},
- say(text,kind){if(!text)return;V.queue.push({text,kind});if(!V.speaking)V._run()},
+ say(text,kind){if(!text)return;
+  // v1.9.1: bez dublowania – ten sam tekst już mówiony lub w kolejce nie jest dodawany drugi raz
+  const core=t=>String(t).replace(/^Przypominam\.\s*/,'');if((V.speaking&&core(V.current)===core(text))||V.queue.some(q=>core(q.text)===core(text)))return;V.queue.push({text,kind});if(!V.speaking)V._run()},
  // v1.8: pomiń tylko nieaktualne pytanie/przypomnienie (po przyjętej komendzie); kolejka zostaje
  skipStale(old){if(!old)return false;const st=it=>(it.kind==='ask'||it.kind==='remind')&&String(it.text).endsWith(old);V.queue=V.queue.filter(it=>!st(it));
   if(V.speaking&&st({kind:V.kind,text:V.current})){V._cut=true;V.srcs.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});V.srcs=[];if(V._seqDone){const d=V._seqDone;V._seqDone=null;d()}try{V.audio.pause();V.audio.onended&&V.audio.onended()}catch(e){}const T=plug('TextToSpeech');if(T)T.stop().catch(()=>{});if(root.speechSynthesis)speechSynthesis.cancel();return true}return false},
+ // v1.9.1: zatrzymaj WSZYSTKIE zaplanowane źródła – po wznowieniu kontekstu stare nie grają równolegle z powtórką
+ killSrcs(){V.srcs.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});V.srcs=[]},
  stop(){V.queue=[];V._cut=true;V.srcs.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});V.srcs=[];if(V._seqDone){const d=V._seqDone;V._seqDone=null;d()}
   try{V.audio.pause();V.audio.onended&&V.audio.onended()}catch(e){}if(root.speechSynthesis)speechSynthesis.cancel();const T=plug('TextToSpeech');if(T)T.stop().catch(()=>{})},
  async _run(){V.speaking=true;V.startedAt=Date.now();V.onState(true);
   // v1.8: mikrofon pauzowany PRZED dźwiękiem lektora – rozpoznawacz nie zabiera fokusu audio i nie słyszy lektora
-  try{if(S.running)await Promise.race([S.pause(),new Promise(r=>setTimeout(r,400))])}catch(e){}
+  try{if(S.running&&!S.paused){await Promise.race([S.pause(),new Promise(r=>setTimeout(r,400))]);await new Promise(r=>setTimeout(r,150))}}catch(e){}
   let asked=false;while(V.queue.length){const it=V.queue.shift();if(it.kind==='ask'||it.kind==='remind'||it.kind==='replay')asked=true;V.current=it.text;V.kind=it.kind;V._cut=false;for(const seg of V.plan(it.text)){if(V._cut)break;try{seg.clips?await V._seq(seg.clips):await V._tts(seg.tts)}catch(e){}}if(it.kind==='ask'||it.kind==='remind')M.duck(1500);V.hooks.forEach(h=>{try{h('clip')}catch(e){}})}
   V.current='';V.speaking=false;V.endedAt=Date.now();V.onState(false);if(!S.windowMode)S.resumeSoon();else if(asked)S.openWindow()},
  async _seq(list,retry){V.stats.clips+=list.length;if(V.startReady){const p=V.startReady;V.startReady=null;await Promise.race([p,new Promise(r=>setTimeout(r,1500))])}
   if(V.ctx){try{if(V.ctx.state!=='running')await V.ctx.resume();const bs=await Promise.all(list.map(f=>f?V.buf(f):null));if(V._cut)return;
     V._intr=false;V.ctx.onstatechange=()=>{if(V.ctx.state!=='running')V._intr=true};
-    await new Promise(res=>{let t=V.ctx.currentTime+0.04;V.srcs=[];let last=null;
+    V.killSrcs();await new Promise(res=>{let t=V.ctx.currentTime+0.06;V.srcs=[];let last=null;
      for(const b of bs){if(!b){t+=GAP;continue}const s=V.ctx.createBufferSource();s.buffer=b;s.connect(V.ctx.destination);s.start(t);t+=b.duration;V.srcs.push(s);last=s}
-     V._seqDone=res;const fin=()=>{if(V._seqDone===res){V._seqDone=null;V.srcs=[];res()}};if(last)last.onended=fin;setTimeout(fin,(t-V.ctx.currentTime)*1000+800)});
+     V._seqDone=res;const fin=kill=>{if(V._seqDone===res){V._seqDone=null;if(kill)V.killSrcs();else V.srcs=[];res()}};if(last)last.onended=()=>fin(false);setTimeout(()=>fin(true),(t-V.ctx.currentTime)*1000+800)});
     // przerwane przez system (fokus audio) – wznów kontekst i odtwórz zdanie jeszcze raz (raz), nigdy nie ucinaj
-    if(V._intr&&!V._cut&&!retry){V.stats.replays=(V.stats.replays||0)+1;try{await V.ctx.resume()}catch(e){}return V._seq(list,true)}return}
+    if(V._intr&&!V._cut&&!retry&&V.ctx.state!=='closed'){V.killSrcs();V.stats.replays=(V.stats.replays||0)+1;try{await V.ctx.resume()}catch(e){}return V._seq(list,true)}return}
    catch(e){V.stats.fallback++}}
   for(const f of list){if(V._cut)return;if(f)await V._clip(f);else await new Promise(r=>setTimeout(r,GAP*1000))}},
  _clip(f){return new Promise(res=>{const a=V.audio;let done=false;const fin=()=>{if(!done){done=true;res()}};a.onended=fin;a.onerror=fin;a.src='audio/'+f;a.play().catch(fin);setTimeout(fin,15000)})},
