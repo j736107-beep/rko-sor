@@ -31,11 +31,22 @@ $('#go').onclick=()=>begin(false);$('#sim').onclick=()=>begin(true);
 function startEarsAfterFirst(){setTimeout(()=>Ears.start(),300)}
 let pendingIn=[];Voice.hooks.push(sp=>{if(!sp&&pendingIn.length){const q=pendingIn;pendingIn=[];q.forEach(a=>handle(a,true))}});
 function handle(alts,direct,conf){if(mic.on){mic.res(alts);return}if(!E)return;alts=[].concat(alts);
- if(!direct&&Voice.speaking){const b=RKO.bargeIn(alts[0],Voice.current,cfg.barge,conf);if(b==='ignore'){Ears.mark('echo lektora – pominięto');return}if(b==='queue'){pendingIn.push(alts);Ears.mark('w kolejce (lektor mówi)');$('#heard').textContent='mikrofon: '+alts[0]+' (w kolejce)';return}Voice.stop()}
-$('#heard').textContent='mikrofon: '+[].concat(alts)[0];const before=E.s.cur&&E.s.cur.id;const r=RKO.interpret(alts,E.ctx());const c=E.input(alts);Ears.mark(c?('komenda: '+c+(r.fuzzy?' (przybliżone)':'')+(before?' [pytanie: '+before+']':'')):('nie pasuje'+(before?' [pytanie: '+before+']':'')));
+ // v1.8: głos nigdy nie przerywa lektora (wynik w trakcie mowy → kolejka)
+ if(!direct&&Voice.speaking){pendingIn.push(alts);Ears.mark('w kolejce (lektor mówi)');return}
+$('#heard').textContent='mikrofon: '+[].concat(alts)[0];const before=E.s.cur&&E.s.cur.id,beforeTxt=E.s.cur&&E.s.cur.text,k0=RKO.btnKey(E.s);const r=RKO.interpret(alts,E.ctx());const c=E.input(alts);
+ if(c==='unmatched')$('#heard').textContent='nie rozpoznano: „'+alts[0]+'” – powiedz jeszcze raz albo użyj przycisku';
+ else if(beforeTxt&&RKO.btnKey(E.s)!==k0&&!(E.s.cur&&E.s.cur.text===beforeTxt))Voice.skipStale(beforeTxt);Ears.mark(c&&c!=='unmatched'?('komenda: '+c+(r.fuzzy?' (przybliżone)':'')+(before?' [pytanie: '+before+']':'')):('nie pasuje'+(before?' [pytanie: '+before+']':'')));
  if(c==='send'){if(E.s.mode==='ended')sendReport(E.s);else E.say('Raport wyślę po zakończeniu.')}
  if(E.s.mode==='ended')finished();render()}
-$$('.fb [data-c],.fb2 [data-c],#bigb [data-c]').forEach(b=>b.onclick=()=>{Ears.addLog('przycisk',b.dataset.c);if(RKO.bargeIn(b.dataset.c,'')==='interrupt')Voice.stop();handle([b.dataset.c],true)});
+$$('.fb [data-c],.fb2 [data-c]').forEach(b=>b.onclick=()=>{Ears.addLog('przycisk',b.dataset.c);press(b,b.dataset.c);handle([b.dataset.c],true)});
+// v1.8: przyciski kontekstowe – do bieżącego pytania lektora; kolor aktywny do przyjęcia komendy / następnego kroku
+const PS=new RKO.PressState();let ctxKey=null;
+function press(el,c){PS.press(c,Date.now());el.classList.add('act');setTimeout(()=>{el.classList.remove('act')},900)}
+function renderCtx(force){const box=$('#ctxb');if(!box||!E)return;const key=RKO.btnKey(E.s),act=PS.sync(key,Date.now());
+ if(force||key!==ctxKey){ctxKey=key;const L=RKO.buttonsFor(E.s);box.className='ctxb n'+Math.min(L.length,5);box.innerHTML='';
+  L.forEach(x=>{const b=document.createElement('button');b.textContent=x.label;b.dataset.c=x.c;if(x.cls)b.classList.add('k'+x.cls);
+   b.onclick=()=>{press(b,x.c);Ears.addLog('przycisk',x.c);if(x.c==='#num'){$('#numB').click();return}setTimeout(()=>{handle([x.c],true);renderCtx()},120)};box.appendChild(b)})}
+ box.querySelectorAll('button').forEach(b=>b.classList.toggle('act',act!=null&&b.dataset.c===act))}
 // klawiatura liczb
 let pv='';const pg=$('.padg');['1','2','3','4','5','6','7','8','9','⌫','0','OK'].forEach(k=>{const b=document.createElement('button');b.textContent=k;b.onclick=()=>{if(k==='OK'){$('#pad').classList.add('hide');if(pv)handle([pv],true);pv=''}else if(k==='⌫')pv=pv.slice(0,-1);else pv+=k;$('#padv').textContent=pv||'\u00a0'};pg.appendChild(b)});
 $('#numB').onclick=()=>{pv='';$('#padv').textContent='\u00a0';$('#pad').classList.remove('hide')};
@@ -70,7 +81,7 @@ function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')ret
  if(s.mode==='rosc'){nx=s.nora?'Noradrenalina '+RKO.fmt1(s.nora.mlh)+' ml/h':'Pętla ciśnienia';if(s.dobu)nx+=' · dobutamina '+RKO.fmt1(s.dobu.mlh)+' ml/h';if(s.lastMap!=null)nx+=' · MAP '+s.lastMap;if(s.nextMap)nx+=' · pomiar za '+mmss(s.nextMap-now)}
  if(s.cur)nx+='\n❓ '+s.cur.text.slice(0,70);
  if(s.sim&&s.mode==='arrest')nx='Monitor (symulacja): '+(s.simRhythm||'?')+'\n'+nx;
- $('#next').textContent=nx;$('#next').classList.toggle('due',due)}
+ $('#next').textContent=nx;$('#next').classList.toggle('due',due);renderCtx()}
 function finished(){clearInterval(timer);Metro.want=false;Metro.cut();Ears.stop();wake(false);const s=E.s;LS.set('rko_cur',null);
  const list=LS.get('rko_reports',[]);s.id=s.id||('R'+s.t0);if(!list.find(r=>r.id===s.id))list.unshift(s);LS.set('rko_reports',list.slice(0,30));
  setTimeout(()=>{showReport(s)},1200)}
@@ -126,7 +137,7 @@ $('#selftest').onclick=async()=>{const o=[];Voice.unlock();o.push('Nagrania lekt
  const SR=plug('SpeechRecognition');if(SR){try{const a=await SR.available();o.push('Rozpoznawanie mowy: '+(a.available?'dostępne':'BRAK'));const p=await SR.requestPermissions();o.push('Mikrofon: '+p.speechRecognition)}catch(e){o.push('Mikrofon: błąd '+e.message)}}
  else o.push('Rozpoznawanie mowy (przeglądarka): '+((window.SpeechRecognition||window.webkitSpeechRecognition)?'dostępne (Chrome wymaga sieci)':'brak – tylko przyciski'));
  $('#stres').textContent=o.join('\n')};
-function renderHelp(){$('#helpc').innerHTML=`<h2>Komendy głosowe</h2><p class="small">TAK (główne) · JEST · OKEJ · OK · DOBRZE · ZROBIONE · GOTOWE · PODANE · PODANO (potwierdzenie bieżącego polecenia; „okej/gotowe” nie odpowiadają „tak” na pytania kliniczne; zakończenie tylko „tak, zakończ”) · NIE · PODANO · „adrenalina podano” · „amiodaron/lidokaina podano” · rytm: „migotanie” / „migotanie komór” / „VF” = VF, „częstoskurcz” / „VT” = pVT, „asystolia” (też „linia”, „płaska”), „PEA” (też „pa”, „pija”, „bez tętna”, „brak tętna”, „rozkojarzenie”), „TĘTNO” / „jest tętno” / „powrót krążenia” = ROSC, potem „zatokowy”, „migotanie przedsionków” albo „inny”, „bradykardia” · „RKO od 20 minut” (pacjent przywieziony) · „defibrylacja wykonana”/„wyładowano” · „nie mogę uciskać”/„jestem sam” · „intubacja” · „USG” · „ROSC” · „zatrzymanie” · „zwiększ”/„utrzymaj” · liczby słownie („dziewięćdziesiąt”) · „wodorowęglan” · „pauza”/„stop”/„dalej”, „zmniejsz”, „wlew heparyny”, „wlew amiodaronu”, „wlew adrenaliny”, „masa 80 kilogramów”, ciśnienie „120 na 80” · „powtórz”, „powtórz ostatnie polecenie”, „odtwórz instrukcję” · „zakończ” → „tak, zakończ” · „wyślij na moją skrzynkę”.</p>
+function renderHelp(){$('#helpc').innerHTML=`<h2>Komendy głosowe</h2><p class="small">TAK – jedyne potwierdzenie głosem · NIE – zaprzeczenie (zakończenie tylko „tak, zakończ”). Każde pytanie ma też duże przyciski na ekranie. · NIE · PODANO · „adrenalina podano” · „amiodaron/lidokaina podano” · rytm (lektor podpowiada): „migotanie”, „asystolia”, „bez tętna”, „tętno”; także „migotanie komór” / „VF” = VF, „częstoskurcz” / „VT” = pVT, „asystolia” (też „linia”, „płaska”), „PEA” (też „pa”, „pija”, „bez tętna”, „brak tętna”, „rozkojarzenie”), „TĘTNO” / „jest tętno” / „powrót krążenia” = ROSC, potem „zatokowy”, „migotanie przedsionków” albo „inny”, „bradykardia” · „RKO od 20 minut” (pacjent przywieziony) · „defibrylacja wykonana”/„wyładowano” · „nie mogę uciskać”/„jestem sam” · „intubacja” · „USG” · „ROSC” · „zatrzymanie” · „zwiększ”/„utrzymaj” · liczby słownie („dziewięćdziesiąt”) · „wodorowęglan” · „pauza”/„stop”/„dalej”, „zmniejsz”, „wlew heparyny”, „wlew amiodaronu”, „wlew adrenaliny”, „masa 80 kilogramów”, ciśnienie „120 na 80” · „powtórz”, „powtórz ostatnie polecenie”, „odtwórz instrukcję” · „zakończ” → „tak, zakończ” · „wyślij na moją skrzynkę”.</p>
 <h2>Wysyłka raportu – instrukcja dla lekarza</h2><ol class="small"><li>Ustawienia → „Mój e-mail” → wpisz swój adres (raz).</li><li>Po zakończeniu: przycisk „WYŚLIJ” albo komenda „wyślij na moją skrzynkę”.</li><li>Otworzy się program poczty z adresem i załącznikiem DOCX – zatwierdź „Wyślij”.</li><li>Bez sieci raport czeka w kolejce (Raporty → „Wyślij kolejkę teraz”).</li><li>Na komputerze: otwórz pocztę lub chmurę tego samego konta i pobierz plik.</li></ol>
 <p class="small">Raport nie zawiera nazwiska ani PESEL. Zgodność z RODO – DO WERYFIKACJI z IOD.</p>`}
 if('serviceWorker' in navigator&&!window.isNative&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});

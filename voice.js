@@ -28,16 +28,24 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
   // scal kolejne zdania z nagrań w jedną sekwencję (bez przerw między plikami)
   const m=[];for(const x of out){const l=m[m.length-1];if(x.clips&&l&&l.clips){l.clips.push(null,...x.clips)}else m.push(x.clips?{clips:x.clips.slice()}:x)}return m},
  say(text,kind){if(!text)return;V.queue.push({text,kind});if(!V.speaking)V._run()},
+ // v1.8: pomiń tylko nieaktualne pytanie/przypomnienie (po przyjętej komendzie); kolejka zostaje
+ skipStale(old){if(!old)return false;const st=it=>(it.kind==='ask'||it.kind==='remind')&&String(it.text).endsWith(old);V.queue=V.queue.filter(it=>!st(it));
+  if(V.speaking&&st({kind:V.kind,text:V.current})){V._cut=true;V.srcs.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});V.srcs=[];if(V._seqDone){const d=V._seqDone;V._seqDone=null;d()}try{V.audio.pause();V.audio.onended&&V.audio.onended()}catch(e){}const T=plug('TextToSpeech');if(T)T.stop().catch(()=>{});if(root.speechSynthesis)speechSynthesis.cancel();return true}return false},
  stop(){V.queue=[];V._cut=true;V.srcs.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});V.srcs=[];if(V._seqDone){const d=V._seqDone;V._seqDone=null;d()}
   try{V.audio.pause();V.audio.onended&&V.audio.onended()}catch(e){}if(root.speechSynthesis)speechSynthesis.cancel();const T=plug('TextToSpeech');if(T)T.stop().catch(()=>{})},
  async _run(){V.speaking=true;V.startedAt=Date.now();V.onState(true);
+  // v1.8: mikrofon pauzowany PRZED dźwiękiem lektora – rozpoznawacz nie zabiera fokusu audio i nie słyszy lektora
+  try{if(S.running)await Promise.race([S.pause(),new Promise(r=>setTimeout(r,400))])}catch(e){}
   while(V.queue.length){const it=V.queue.shift();V.current=it.text;V.kind=it.kind;V._cut=false;for(const seg of V.plan(it.text)){if(V._cut)break;try{seg.clips?await V._seq(seg.clips):await V._tts(seg.tts)}catch(e){}}if(it.kind==='ask'||it.kind==='remind')M.duck(1500);V.hooks.forEach(h=>{try{h('clip')}catch(e){}})}
-  V.current='';V.speaking=false;V.endedAt=Date.now();V.onState(false)},
- async _seq(list){V.stats.clips+=list.length;if(V.startReady){const p=V.startReady;V.startReady=null;await Promise.race([p,new Promise(r=>setTimeout(r,1500))])}
+  V.current='';V.speaking=false;V.endedAt=Date.now();V.onState(false);S.resumeSoon()},
+ async _seq(list,retry){V.stats.clips+=list.length;if(V.startReady){const p=V.startReady;V.startReady=null;await Promise.race([p,new Promise(r=>setTimeout(r,1500))])}
   if(V.ctx){try{if(V.ctx.state!=='running')await V.ctx.resume();const bs=await Promise.all(list.map(f=>f?V.buf(f):null));if(V._cut)return;
-    return await new Promise(res=>{let t=V.ctx.currentTime+0.04;V.srcs=[];let last=null;
+    V._intr=false;V.ctx.onstatechange=()=>{if(V.ctx.state!=='running')V._intr=true};
+    await new Promise(res=>{let t=V.ctx.currentTime+0.04;V.srcs=[];let last=null;
      for(const b of bs){if(!b){t+=GAP;continue}const s=V.ctx.createBufferSource();s.buffer=b;s.connect(V.ctx.destination);s.start(t);t+=b.duration;V.srcs.push(s);last=s}
-     V._seqDone=res;const fin=()=>{if(V._seqDone===res){V._seqDone=null;V.srcs=[];res()}};if(last)last.onended=fin;setTimeout(fin,(t-V.ctx.currentTime)*1000+800)})}
+     V._seqDone=res;const fin=()=>{if(V._seqDone===res){V._seqDone=null;V.srcs=[];res()}};if(last)last.onended=fin;setTimeout(fin,(t-V.ctx.currentTime)*1000+800)});
+    // przerwane przez system (fokus audio) – wznów kontekst i odtwórz zdanie jeszcze raz (raz), nigdy nie ucinaj
+    if(V._intr&&!V._cut&&!retry){V.stats.replays=(V.stats.replays||0)+1;try{await V.ctx.resume()}catch(e){}return V._seq(list,true)}return}
    catch(e){V.stats.fallback++}}
   for(const f of list){if(V._cut)return;if(f)await V._clip(f);else await new Promise(r=>setTimeout(r,GAP*1000))}},
  _clip(f){return new Promise(res=>{const a=V.audio;let done=false;const fin=()=>{if(!done){done=true;res()}};a.onended=fin;a.onerror=fin;a.src='audio/'+f;a.play().catch(fin);setTimeout(fin,15000)})},
@@ -50,20 +58,26 @@ const ERR={1:'przekroczony czas sieci',2:'błąd sieci',3:'błąd nagrywania dź
 const QUIET_ERR=[6,7,'no-speech','aborted'];
 const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{},status:'off',barge:'min',fails:0,log:[],errors:{},
  classify(alts){return root.RKO?root.RKO.interpret(alts):{cmd:null}},
- listenWhileSpeaking(){return true},
+ listenWhileSpeaking(){return false},
+ paused:false,
+ async pause(){S.paused=true;clearTimeout(S._rt);S._sess();if(S.mode==='native'){const N=plug('RkoNative');if(N&&N.srPause)await N.srPause()}else if(S.mode==='web'&&S.web){try{S.web.abort()}catch(e){}}},
+ resumeSoon(){clearTimeout(S._rt);if(!S.running)return;S._rt=setTimeout(()=>{if(!S.running||V.speaking)return;S.paused=false;
+  if(S.mode==='native'){const N=plug('RkoNative');if(N&&N.srResume)N.srResume().catch(()=>{})}else if(S.mode==='web'&&S.web&&!S.webOn){try{S.web.start();S.webOn=true}catch(e){}}},250)},
  addLog(src,text,extra){const e=Object.assign({t:Date.now(),src,text:text==null?'':String(text)},extra||{});S.log.push(e);if(S.log.length>500)S.log.splice(0,S.log.length-500);try{S.onLog(e)}catch(x){}return e},
  mark(verdict){for(let i=S.log.length-1;i>=0;i--){const e=S.log[i];if(e.src==='final'||e.src==='pośredni→wykonano'||e.src==='przycisk'){if(!e.verdict){e.verdict=verdict;try{S.onLog(e)}catch(x){}}return}}},
  logText(){const p=n=>String(n).padStart(2,'0');return S.log.map(e=>{const d=new Date(e.t);return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0')+' '+e.src+': '+e.text+(e.alts&&e.alts.length>1?' | alternatywy: '+e.alts.slice(1).join(' / '):'')+(e.conf!=null?' | pewność '+(+e.conf).toFixed(2):'')+(e.verdict?' → '+e.verdict:'')}).join('\n')},
  async start(){if(S.running)return;S.running=true;const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:true}).catch(()=>{});const SR=plug('SpeechRecognition');
   if(isNative){if(SR){try{const p=await SR.checkPermissions();if(p.speechRecognition!=='granted'){const q=await SR.requestPermissions();if(q.speechRecognition!=='granted'){S.set('mikrofon: brak uprawnienia – użyj przycisków');S.addLog('błąd','brak uprawnienia do mikrofonu');S.running=false;return}}}catch(e){S.addLog('info','uprawnienia: '+(e&&e.message))}}
+   while(S.running&&V.speaking){S.set('czekam, lektor mówi');await new Promise(r=>setTimeout(r,100))}if(!S.running)return;
    if(N&&N.srStart){if(!S._lis){S._lis=true;try{N.addListener('sr',ev=>S._ev(ev))}catch(e){}}try{await N.srStart({language:'pl-PL'});S.mode='native';S.addLog('info','start rozpoznawania (natywne, pl-PL, bez trybu offline)');S.set('słucham')}catch(e){S.set('mikrofon: rozpoznawanie niedostępne ('+(e&&e.message||e)+') – użyj przycisków');S.addLog('błąd','srStart: '+(e&&e.message||e));S.running=false}return}
    if(SR){S.mode='plugin';S._plugin(SR);return}}
+  while(S.running&&V.speaking)await new Promise(r=>setTimeout(r,100));
   const W=root.SpeechRecognition||root.webkitSpeechRecognition;if(!W){S.set('brak rozpoznawania mowy – użyj przycisków');S.running=false;return}
   const r=new W();r.lang='pl-PL';r.continuous=true;r.interimResults=true;r.maxAlternatives=5;S.web=r;S.mode='web';
   r.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++){const res=e.results[i];const alts=[...res].map(a=>a.transcript);
    if(res.isFinal)S._final(alts,res[0]&&res[0].confidence);else S._partial(alts)}};
   r.onstart=()=>{S.webOn=true;S._ev({type:'ready'})};r.onspeechstart=()=>S._ev({type:'begin'});r.onspeechend=()=>S._ev({type:'end'});
-  r.onend=()=>{S.webOn=false;S._sess();if(S.running)setTimeout(()=>{if(S.running&&!S.webOn)try{S.web.start();S.webOn=true}catch(e){}},50)};
+  r.onend=()=>{S.webOn=false;S._sess();if(S.running)setTimeout(()=>{if(S.running&&!S.webOn&&!S.paused&&!V.speaking)try{S.web.start();S.webOn=true}catch(e){}},50)};
   r.onerror=e=>{S._err(e.error);if(['not-allowed','service-not-allowed','audio-capture','language-not-supported'].includes(e.error)){S.running=false;try{r.abort()}catch(x){}}};
   try{r.start();S.webOn=true;S.set('słucham')}catch(e){S.set('mikrofon niedostępny')}},
  _sess(){clearTimeout(S._pt);S._pend=null;S._sent=null;S._lastPartial=''},
@@ -86,7 +100,10 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
   if(!alts.length){S._sess();return}
   if(sent){const c=S.classify(alts)||{};S._sess();S.addLog('final',alts[0],{alts,conf,verdict:c.cmd===sent?'duplikat – wykonano już z wyniku pośredniego':'po wyniku pośrednim – pominięto'});return}
   S._sess();S.fails=0;S.addLog('final',alts[0],{alts,conf});S.emit(alts,conf,'final')},
- emit(alts,conf,src){if(!alts||!alts.length)return;try{S.onHeard(alts[0])}catch(e){}
+ emit(alts,conf,src){if(!alts||!alts.length)return;
+  // v1.8: nic z mikrofonu nie przerywa lektora – wynik w trakcie mowy (spóźniony) jest pomijany
+  if(V.speaking||S.paused){S.mark('pominięto – lektor mówi');return}
+  try{S.onHeard(alts[0])}catch(e){}
   if(root.RKO&&/^((tik|tyk|klik|puk|tuk|tup)\s*)+$/.test(root.RKO.norm(alts[0]))&&root.Metro&&root.Metro.want){S.mark('kliknięcie metronomu – pominięto');return}
   // echo tuż po końcu mowy lektora: tylko niemal dokładna kopia zdania
   const now=Date.now();if(!V.speaking&&now-V.endedAt<300&&root.RKO&&root.RKO.echoOf(alts[0],V.lastText||'')){S.mark('echo lektora – pominięto');return}
@@ -105,7 +122,7 @@ const M={want:false,rate:110,vol:0.15,next:0,nodes:[],timer:null,clicks:0,duckUn
  ducked(){const n=Date.now();return n<M.duckUntil||(M.userOn&&n-M.userT<M.USER_CAP)},
  start(){if(!M.timer)M.timer=setInterval(M.tick,25)},
  active(){return M.want&&!V.speaking&&!M.ducked()&&V.ctx&&V.ctx.state==='running'},
- tick(){const c=V.ctx;if(!M.active()){if(M.nodes.length)M.cut();M.next=0;return}const per=60/Math.max(100,Math.min(120,M.rate||110));
+ tick(){const c=V.ctx;if(M.want&&c&&c.state!=='running'&&c.state!=='closed'&&!V.speaking&&Date.now()-(M._rs||0)>500){M._rs=Date.now();try{c.resume()}catch(e){}}if(!M.active()){if(M.nodes.length)M.cut();M.next=0;return}const per=60/Math.max(100,Math.min(120,M.rate||110));
   if(M.next<c.currentTime+0.01)M.next=c.currentTime+0.06;while(M.next<c.currentTime+0.15){M.click(M.next);M.next+=per}
   M.nodes=M.nodes.filter(n=>n.t>c.currentTime-0.1)},
  click(t){const c=V.ctx;try{const o=c.createOscillator(),g=c.createGain();o.type='triangle';o.frequency.value=1250;const v=Math.max(0.02,Math.min(1,M.vol||0.15));
