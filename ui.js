@@ -36,7 +36,7 @@ function begin(sim,resumeState){if(sim&&!needFull('Symulacja'))return;if(typeof 
  Ears.windowMode=true;if(resumeState){E.resume(resumeState)}else E.start({sim,email:cfg.email,syr:cfg.syr?+cfg.syr:null});
  Ears.classify=alts=>RKO.interpret(alts,E&&E.s&&E.s.mode!=='idle'?E.ctx():{});
  $('#simbar').classList.toggle('hide',!E.s.sim);$('#chg').classList.toggle('hide',!E.s.sim);
- Metro.start();show('run');wake(true);nat('action',{on:true});if(cfg.pin==='1')nat('pin',{on:true});$('#wywB').classList.toggle('hide',!isFull());Ears.onResult=(alts,conf,src)=>{if(!Ears.inWindow()){Ears.mark('poza oknem odpowiedzi – pominięto');return}handle(alts,false,conf)};Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
+ Metro.start();show('run');wake(true);Metro.useNative=true;nat('action',{on:true});if(cfg.pin==='1')nat('pin',{on:true});$('#wywB').classList.toggle('hide',!isFull());Ears.onResult=(alts,conf,src)=>{if(!Ears.inWindow()){Ears.mark('poza oknem odpowiedzi – pominięto');return}handle(alts,false,conf)};Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
 $('#go').onclick=()=>{if(E&&E.s&&E.s.mode!=='idle'&&E.s.mode!=='ended'){show('run');return}begin(false)};$('#sim').onclick=()=>begin(true);
 // mikrofon dopiero po pierwszym komunikacie (start rozpoznawania zabiera fokus audio na Androidzie)
 // v1.6.2: mikrofon startuje natychmiast po końcu pierwszego nagrania (pętla natywna i tak czeka, aż lektor zamilknie)
@@ -113,7 +113,7 @@ function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')ret
  if(s.cur)nx+='\n▸ '+s.cur.text.slice(0,70);
  if(s.sim&&s.mode==='arrest')nx='Monitor (symulacja): '+(s.simRhythm||'?')+'\n'+nx;
  $('#next').textContent=nx;$('#next').classList.toggle('due',due);renderCtx();renderUndo()}
-function finished(){clearInterval(timer);Metro.want=false;Metro.cut();Ears.stop();wake(false);nat('action',{on:false});nat('pin',{on:false});const s=E.s;LS.set('rko_cur',null);
+function finished(){clearInterval(timer);Metro.want=false;Metro.cut();Ears.stop();wake(false);Metro.useNative=false;nat('action',{on:false});nat('pin',{on:false});const s=E.s;LS.set('rko_cur',null);
  const list=LS.get('rko_reports',[]);s.id=s.id||('R'+s.t0);if(!list.find(r=>r.id===s.id))list.unshift(s);LS.set('rko_reports',list.slice(0,30));
  setTimeout(()=>{if(isFull())showReport(s);else{show('home');toast('Akcja zapisana. Raport i PDF – w wersji pełnej.')}},1200)}
 // ---- wznowienie po zamknięciu ----
@@ -201,5 +201,5 @@ function renderHelp(){$('#helpc').innerHTML=`<h2>Najważniejsze (v1.9)</h2><p cl
 <p class="small">Raport nie zawiera nazwiska ani PESEL. Zgodność z RODO – DO WERYFIKACJI z IOD.</p>`}
 if('serviceWorker' in navigator&&!window.isNative&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 Voice.init();
-window.__rko={get E(){return E},handle,show,showReport,docxBytes};
+window.__rko={get E(){return E},handle,show,showReport,docxBytes,wake,nat,repBlocks,toast,copyText,get LICS(){return LICS},instId,isFull,updCheck,newer,active,mic};
 })();

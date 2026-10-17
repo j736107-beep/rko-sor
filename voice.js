@@ -7,6 +7,8 @@ const Cap=root.Capacitor,isNative=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlat
 const plug=n=>isNative&&Cap.Plugins?Cap.Plugins[n]:null;
 const PREFIX=['Zmniejszam. Ustaw pompę','Zwiększam. Ustaw pompę','Utrzymaj. Pompa','Ustaw pompę','Średnie ciśnienie wynosi','Zapisano:'];
 const GAP=0.12,CACHE_MAX=220;
+// v1.9.2: każde oczekiwanie ma limit czasu – lektor nigdy nie „wisi” (zawieszony stan mówienia blokował mikrofon i testy)
+const TO=(p,ms)=>Promise.race([Promise.resolve(p).catch(()=>{}),new Promise(r=>setTimeout(r,ms))]);
 function key(t){return String(t).trim()}
 function sentences(t){return String(t).split(/(?<=[.?!])\s+/).filter(Boolean)}
 const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:new Map(),srcs:[],current:'',startedAt:0,endedAt:0,stats:{tts:0,clips:0,fallback:0},
@@ -41,20 +43,20 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
  async _run(){V.speaking=true;V.startedAt=Date.now();V.onState(true);
   // v1.8: mikrofon pauzowany PRZED dźwiękiem lektora – rozpoznawacz nie zabiera fokusu audio i nie słyszy lektora
   try{if(S.running&&!S.paused){await Promise.race([S.pause(),new Promise(r=>setTimeout(r,400))]);await new Promise(r=>setTimeout(r,150))}}catch(e){}
-  let asked=false;while(V.queue.length){const it=V.queue.shift();if(it.kind==='ask'||it.kind==='remind'||it.kind==='replay')asked=true;V.current=it.text;V.kind=it.kind;V._cut=false;for(const seg of V.plan(it.text)){if(V._cut)break;try{seg.clips?await V._seq(seg.clips):await V._tts(seg.tts)}catch(e){}}if(it.kind==='ask'||it.kind==='remind')M.duck(1500);V.hooks.forEach(h=>{try{h('clip')}catch(e){}})}
+  let asked=false;while(V.queue.length){const it=V.queue.shift();if(it.kind==='ask'||it.kind==='remind'||it.kind==='replay')asked=true;V.current=it.text;V.kind=it.kind;V._cut=false;for(const seg of V.plan(it.text)){if(V._cut)break;try{await TO(seg.clips?V._seq(seg.clips):V._tts(seg.tts),20000)}catch(e){V.stats.err=(V.stats.err||0)+1}}if(it.kind==='ask'||it.kind==='remind')M.duck(1500);V.hooks.forEach(h=>{try{h('clip')}catch(e){}})}
   V.current='';V.speaking=false;V.endedAt=Date.now();V.onState(false);if(!S.windowMode)S.resumeSoon();else if(asked)S.openWindow()},
  async _seq(list,retry){V.stats.clips+=list.length;if(V.startReady){const p=V.startReady;V.startReady=null;await Promise.race([p,new Promise(r=>setTimeout(r,1500))])}
-  if(V.ctx){try{if(V.ctx.state!=='running')await V.ctx.resume();const bs=await Promise.all(list.map(f=>f?V.buf(f):null));if(V._cut)return;
+  if(V.ctx){try{if(V.ctx.state!=='running')await TO(V.ctx.resume(),800);if(V.ctx.state!=='running')throw new Error('ctx '+V.ctx.state);const bs=await Promise.race([Promise.all(list.map(f=>f?V.buf(f):null)),new Promise((_,ko)=>setTimeout(()=>ko(new Error('decode timeout')),4000))]);if(V._cut)return;
     V._intr=false;V.ctx.onstatechange=()=>{if(V.ctx.state!=='running')V._intr=true};
     V.killSrcs();await new Promise(res=>{let t=V.ctx.currentTime+0.06;V.srcs=[];let last=null;
      for(const b of bs){if(!b){t+=GAP;continue}const s=V.ctx.createBufferSource();s.buffer=b;s.connect(V.ctx.destination);s.start(t);t+=b.duration;V.srcs.push(s);last=s}
      V._seqDone=res;const fin=kill=>{if(V._seqDone===res){V._seqDone=null;if(kill)V.killSrcs();else V.srcs=[];res()}};if(last)last.onended=()=>fin(false);setTimeout(()=>fin(true),(t-V.ctx.currentTime)*1000+800)});
     // przerwane przez system (fokus audio) – wznów kontekst i odtwórz zdanie jeszcze raz (raz), nigdy nie ucinaj
-    if(V._intr&&!V._cut&&!retry&&V.ctx.state!=='closed'){V.killSrcs();V.stats.replays=(V.stats.replays||0)+1;try{await V.ctx.resume()}catch(e){}return V._seq(list,true)}return}
+    if(V._intr&&!V._cut&&!retry&&V.ctx.state!=='closed'){V.killSrcs();V.stats.replays=(V.stats.replays||0)+1;await TO(V.ctx.resume(),800);return V._seq(list,true)}return}
    catch(e){V.stats.fallback++}}
   for(const f of list){if(V._cut)return;if(f)await V._clip(f);else await new Promise(r=>setTimeout(r,GAP*1000))}},
  _clip(f){return new Promise(res=>{const a=V.audio;let done=false;const fin=()=>{if(!done){done=true;res()}};a.onended=fin;a.onerror=fin;a.src='audio/'+f;a.play().catch(fin);setTimeout(fin,15000)})},
- async _tts(t){V.stats.tts++;const T=plug('TextToSpeech');if(T){return T.speak({text:t,lang:'pl-PL',rate:0.95,pitch:0.95,volume:1,category:'playback'})}
+ async _tts(t){V.stats.tts++;const T=plug('TextToSpeech');if(T){return TO(T.speak({text:t,lang:'pl-PL',rate:0.95,pitch:0.95,volume:1,category:'playback'}),Math.max(4000,t.length*120))}
   if(!root.speechSynthesis)return;return new Promise(res=>{const u=new SpeechSynthesisUtterance(t);u.lang='pl-PL';u.rate=.95;const vs=speechSynthesis.getVoices().filter(v=>/^pl/i.test(v.lang));u.voice=vs.find(v=>/zofia|female|kobieta|paulina|ewa/i.test(v.name))||vs[0]||null;u.onend=res;u.onerror=res;speechSynthesis.speak(u);setTimeout(res,12000)})},
  alarm(){try{const c=V.ctx||(V.ctx=new (root.AudioContext||root.webkitAudioContext)());for(let i=0;i<3;i++){const o=c.createOscillator(),g=c.createGain();o.type='square';o.frequency.value=880;g.gain.value=.25;o.connect(g);g.connect(c.destination);o.start(c.currentTime+i*.35);o.stop(c.currentTime+i*.35+.2)}}catch(e){}if(navigator.vibrate)navigator.vibrate([300,100,300])}};
 // ---- rozpoznawanie mowy (v1.7) ----
@@ -75,7 +77,7 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
  addLog(src,text,extra){const e=Object.assign({t:Date.now(),src,text:text==null?'':String(text)},extra||{});S.log.push(e);if(S.log.length>500)S.log.splice(0,S.log.length-500);try{S.onLog(e)}catch(x){}return e},
  mark(verdict){for(let i=S.log.length-1;i>=0;i--){const e=S.log[i];if(e.src==='final'||e.src==='pośredni→wykonano'||e.src==='przycisk'){if(!e.verdict){e.verdict=verdict;try{S.onLog(e)}catch(x){}}return}}},
  logText(){const p=n=>String(n).padStart(2,'0');return S.log.map(e=>{const d=new Date(e.t);return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0')+' '+e.src+': '+e.text+(e.alts&&e.alts.length>1?' | alternatywy: '+e.alts.slice(1).join(' / '):'')+(e.conf!=null?' | pewność '+(+e.conf).toFixed(2):'')+(e.verdict?' → '+e.verdict:'')}).join('\n')},
- async start(){if(S.running)return;S.running=true;const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:true}).catch(()=>{});const SR=plug('SpeechRecognition');
+ async start(){if(S.running)return;S.running=true;S.paused=false;const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:true}).catch(()=>{});const SR=plug('SpeechRecognition');
   if(isNative){if(SR){try{const p=await SR.checkPermissions();if(p.speechRecognition!=='granted'){const q=await SR.requestPermissions();if(q.speechRecognition!=='granted'){S.set('mikrofon: brak uprawnienia – użyj przycisków');S.addLog('błąd','brak uprawnienia do mikrofonu');S.running=false;return}}}catch(e){S.addLog('info','uprawnienia: '+(e&&e.message))}}
    while(S.running&&V.speaking){S.set('czekam, lektor mówi');await new Promise(r=>setTimeout(r,100))}if(!S.running)return;
    if(N&&N.srStart){if(!S._lis){S._lis=true;try{N.addListener('sr',ev=>S._ev(ev))}catch(e){}}try{await N.srStart({language:'pl-PL'});S.mode='native';S.addLog('info','start rozpoznawania (natywne, pl-PL, bez trybu offline)');S.set('słucham');if(S.windowMode)S.openWindow()}catch(e){S.set('mikrofon: rozpoznawanie niedostępne ('+(e&&e.message||e)+') – użyj przycisków');S.addLog('błąd','srStart: '+(e&&e.message||e));S.running=false}return}
@@ -123,7 +125,7 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
    try{const r=await SR.start({language:'pl-PL',maxResults:5,partialResults:false,popup:false});if(r&&r.matches&&r.matches.length)S._final(r.matches,null);else S._err(7)}
    catch(e){S._err(String(e&&e.message||e))}await new Promise(r=>setTimeout(r,60))}},
  async info(){const N=plug('RkoNative');if(N&&N.srInfo){try{return await N.srInfo()}catch(e){return {error:String(e&&e.message||e)}}}return {web:!!(root.SpeechRecognition||root.webkitSpeechRecognition)}},
- stop(){S.running=false;clearTimeout(S._wt);S.winUntil=0;S._sess();const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:false}).catch(()=>{});if(N&&N.srStop)N.srStop().catch(()=>{});const SR=plug('SpeechRecognition');if(SR&&S.mode==='plugin')SR.stop().catch(()=>{});if(S.web)try{S.web.abort()}catch(e){}S.set('off')}};
+ stop(){S.running=false;S.paused=false;clearTimeout(S._wt);S.winUntil=0;S._sess();const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:false}).catch(()=>{});if(N&&N.srStop)N.srStop().catch(()=>{});const SR=plug('SpeechRecognition');if(SR&&S.mode==='plugin')SR.stop().catch(()=>{});if(S.web)try{S.web.abort()}catch(e){}S.set('off')}};
 // ---- metronom uciśnięć (WebAudio, planowany z wyprzedzeniem – bez przerw); milknie, gdy mówi lektor ----
 const M={want:false,rate:110,vol:0.15,next:0,nodes:[],timer:null,clicks:0,duckUntil:0,userOn:false,userT:0,USER_CAP:4000,
  duck(ms){M.duckUntil=Math.max(M.duckUntil,Date.now()+ms)},
@@ -131,7 +133,8 @@ const M={want:false,rate:110,vol:0.15,next:0,nodes:[],timer:null,clicks:0,duckUn
  ducked(){const n=Date.now();return n<M.duckUntil||(M.userOn&&n-M.userT<M.USER_CAP)},
  start(){if(!M.timer)M.timer=setInterval(M.tick,25)},
  active(){return M.want&&!V.speaking&&!M.ducked()&&V.ctx&&V.ctx.state==='running'},
- nat(){return isNative&&plug('RkoNative')&&plug('RkoNative').metro?plug('RkoNative'):null},
+ useNative:false,
+ nat(){return M.useNative&&isNative&&plug('RkoNative')&&plug('RkoNative').metro?plug('RkoNative'):null},
  natSync(){const N=M.nat();const on=!!(M.want&&!V.speaking&&!M.ducked());const st=on+'|'+M.rate+'|'+M.vol;if(st===M._ns)return;M._ns=st;N.metro({on,rate:Math.max(100,Math.min(120,M.rate||110)),vol:Math.max(0.02,Math.min(1,M.vol||0.15))}).catch(()=>{M._ns=null})},
  tick(){if(M.nat()){M.natSync();return}const c=V.ctx;if(M.want&&c&&c.state!=='running'&&c.state!=='closed'&&!V.speaking&&Date.now()-(M._rs||0)>500){M._rs=Date.now();try{c.resume()}catch(e){}}if(!M.active()){if(M.nodes.length)M.cut();M.next=0;return}const per=60/Math.max(100,Math.min(120,M.rate||110));
   if(M.next<c.currentTime+0.01)M.next=c.currentTime+0.06;while(M.next<c.currentTime+0.15){M.click(M.next);M.next+=per}

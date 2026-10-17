@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). Autor: Wujek Fido. */
 (function(root){
 'use strict';
-const VERSION='1.9.1';
+const VERSION='1.9.2';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
