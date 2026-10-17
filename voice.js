@@ -32,7 +32,7 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
   const m=[];for(const x of out){const l=m[m.length-1];if(x.clips&&l&&l.clips){l.clips.push(null,...x.clips)}else m.push(x.clips?{clips:x.clips.slice()}:x)}return m},
  say(text,kind){if(!text)return;
   // v1.9.1: bez dublowania – ten sam tekst już mówiony lub w kolejce nie jest dodawany drugi raz
-  const core=t=>String(t).replace(/^Przypominam\.\s*/,'');if((V.speaking&&core(V.current)===core(text))||V.queue.some(q=>core(q.text)===core(text)))return;V.queue.push({text,kind});if(!V.speaking)V._run()},
+  const core=t=>String(t).replace(/^Przypominam\.\s*/,'');if((V.speaking&&core(V.current)===core(text))||V.queue.some(q=>core(q.text)===core(text)))return;V.queue.push({text,kind});if(!V.speaking&&!V.hold)V._run()},
  // v1.8: pomiń tylko nieaktualne pytanie/przypomnienie (po przyjętej komendzie); kolejka zostaje
  skipStale(old){if(!old)return false;const st=it=>(it.kind==='ask'||it.kind==='remind')&&String(it.text).endsWith(old);V.queue=V.queue.filter(it=>!st(it));
   if(V.speaking&&st({kind:V.kind,text:V.current})){V._cut=true;V.srcs.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});V.srcs=[];if(V._seqDone){const d=V._seqDone;V._seqDone=null;d()}try{V.audio.pause();V.audio.onended&&V.audio.onended()}catch(e){}const T=plug('TextToSpeech');if(T)T.stop().catch(()=>{});if(root.speechSynthesis)speechSynthesis.cancel();return true}return false},
@@ -61,7 +61,7 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
  alarm(){try{const c=V.ctx||(V.ctx=new (root.AudioContext||root.webkitAudioContext)());for(let i=0;i<3;i++){const o=c.createOscillator(),g=c.createGain();o.type='square';o.frequency.value=880;g.gain.value=.25;o.connect(g);g.connect(c.destination);o.start(c.currentTime+i*.35);o.stop(c.currentTime+i*.35+.2)}}catch(e){}if(navigator.vibrate)navigator.vibrate([300,100,300])}};
 // ---- rozpoznawanie mowy (v1.7) ----
 const ERR={1:'przekroczony czas sieci',2:'błąd sieci',3:'błąd nagrywania dźwięku',4:'błąd serwera rozpoznawania',5:'błąd klienta',6:'cisza',7:'brak dopasowania',8:'rozpoznawanie zajęte',9:'brak uprawnienia do mikrofonu',10:'zbyt wiele żądań',11:'serwer rozłączony',12:'język polski nieobsługiwany przez usługę mowy – ustaw Google jako usługę mowy',13:'język polski niedostępny – pobierz pakiet polski w ustawieniach mowy Google',
- 'no-speech':'cisza','aborted':'przerwane','audio-capture':'brak mikrofonu','network':'błąd sieci (Chrome wymaga internetu)','not-allowed':'brak uprawnienia do mikrofonu','service-not-allowed':'usługa niedostępna','language-not-supported':'język nieobsługiwany'};
+ 'no-speech':'cisza','aborted':'przerwane','audio-capture':'brak mikrofonu','network':'błąd sieci (Chrome wymaga internetu)','not-allowed':'brak uprawnienia do mikrofonu','service-not-allowed':'usługa niedostępna','language-not-supported':'język nieobsługiwany','NOT_AVAILABLE':'brak usługi mowy (zainstaluj/włącz Google – usługa mowy)','-1':'błąd startu rozpoznawania'};
 const QUIET_ERR=[6,7,'no-speech','aborted'];
 const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{},status:'off',barge:'min',fails:0,log:[],errors:{},
  classify(alts){return root.RKO?root.RKO.interpret(alts):{cmd:null}},
@@ -69,7 +69,9 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
  paused:false,windowMode:true,WINDOW:8000,
  // v1.9: okno odpowiedzi – mikrofon włączony tylko ~8 s po pytaniu lektora, potem pauza (oszczędza baterię, brak fałszywych komend)
  openWindow(ms){if(!S.running)return;S.resumeSoon();clearTimeout(S._wt);S.winUntil=Date.now()+(ms||S.WINDOW);S._wt=setTimeout(S.closeWindow,(ms||S.WINDOW)+250)},
- closeWindow(){clearTimeout(S._wt);if(!S.running||!S.windowMode)return;if(M.userOn&&Date.now()-M.userT<6000){S._wt=setTimeout(S.closeWindow,1500);return}S.winUntil=0;if(!V.speaking)S.pause().catch(()=>{});S.set('mikrofon czeka na pytanie')},
+ closeWindow(){clearTimeout(S._wt);if(S.pttOn)return;if(!S.running||!S.windowMode)return;if(M.userOn&&Date.now()-M.userT<6000){S._wt=setTimeout(S.closeWindow,1500);return}S.winUntil=0;if(!V.speaking)S.pause().catch(()=>{});S.set('mikrofon czeka na pytanie')},
+ // v1.9.6: metronom milknie, gdy mikrofon naprawdę słucha w oknie odpowiedzi
+ listening(){return S.running&&!S.paused&&S.windowMode&&Date.now()<(S.winUntil||0)},
  inWindow(){return !S.windowMode||Date.now()<(S.winUntil||0)},
  async pause(){S.paused=true;clearTimeout(S._rt);S._sess();if(S.mode==='native'){const N=plug('RkoNative');if(N&&N.srPause)await N.srPause()}else if(S.mode==='web'&&S.web){try{S.web.abort()}catch(e){}}},
  resumeSoon(){clearTimeout(S._rt);if(!S.running)return;S._rt=setTimeout(()=>{if(!S.running||V.speaking)return;S.paused=false;
@@ -99,15 +101,15 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
   case 'partial':S._partial(ev.matches||[]);break;
   case 'final':M.userSpeaking(false,300);S._final(ev.matches||[],ev.conf);break;
   case 'error':M.userSpeaking(false,0);S._err(ev.code,ev.msg);break}},
- _err(code,msg){S._sess();S.errors[code]=(S.errors[code]||0)+1;const txt=ERR[code]||('błąd '+code+(msg?' '+msg:''));
+ _err(code,msg){S._sess();if(S.pttOn&&S._pttErr(code,msg))return;S.errors[code]=(S.errors[code]||0)+1;const txt=ERR[code]||('błąd '+code+(msg?' '+msg:''));
   if(QUIET_ERR.includes(code)){S.addLog('błąd '+code,txt,{quiet:true});return}
   S.fails++;S._errT=Date.now();S.addLog('błąd '+code,txt);S.set('mikrofon: błąd '+code+' – '+txt)},
  // wynik pośredni: wykonaj, gdy jednoznacznie pasuje (nie słaby/rozmyty) i utrzyma się 400 ms bez zmiany
- _partial(alts){alts=(alts||[]).filter(Boolean);if(!alts.length)return;try{S.onHeard('… '+alts[0])}catch(e){}
+ _partial(alts){alts=(alts||[]).filter(Boolean);if(!alts.length)return;if(S.pttOn){const o=S._pttO;S.addLog('PTT pośredni',alts[0]);try{o.ui('… '+alts[0])}catch(e){}if(o.match&&o.match(alts))S.pttEnd(alts,'partial');return}try{S.onHeard('… '+alts[0])}catch(e){}
   if(alts[0]!==S._lastPartial){S._lastPartial=alts[0];S.addLog('pośredni',alts[0])}
   if(S._sent)return;const c=S.classify(alts)||{};clearTimeout(S._pt);S._pend=null;
   if(c.cmd&&c.cmd!=='number'&&!c.weak&&!c.fuzzy){S._pend={alts,cmd:c.cmd};S._pt=setTimeout(()=>{const p=S._pend;if(!p||S._sent)return;S._sent=p.cmd;S.addLog('pośredni→wykonano',p.alts[0],{alts:p.alts});S.emit(p.alts,null,'partial')},400)}},
- _final(alts,conf){alts=(alts||[]).filter(Boolean);clearTimeout(S._pt);const sent=S._sent,pend=S._pend;S._pend=null;
+ _final(alts,conf){alts=(alts||[]).filter(Boolean);clearTimeout(S._pt);if(S.pttOn){S.addLog('PTT final',alts[0]||'(pusto)',{alts});if(alts.length)S.pttEnd(alts,'final');return}const sent=S._sent,pend=S._pend;S._pend=null;
   if(!alts.length){S._sess();return}
   if(sent){const c=S.classify(alts)||{};S._sess();S.addLog('final',alts[0],{alts,conf,verdict:c.cmd===sent?'duplikat – wykonano już z wyniku pośredniego':'po wyniku pośrednim – pominięto'});return}
   S._sess();S.fails=0;S.addLog('final',alts[0],{alts,conf});S.emit(alts,conf,'final')},
@@ -120,6 +122,28 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
   const now=Date.now();if(!V.speaking&&now-V.endedAt<300&&root.RKO&&root.RKO.echoOf(alts[0],V.lastText||'')){S.mark('echo lektora – pominięto');return}
   S.onResult(alts,conf,src)},
  set(st){S.status=st;S.onState(st)},
+ // ===== v1.9.6: przycisk mikrofonu (naciśnij i mów) =====
+ // metronom (natywny i WebAudio) i lektor zatrzymane → 300 ms → rozpoznawacz od zera → wynik pośredni/końcowy albo limit czasu → wszystko wraca
+ pttOn:false,
+ async ptt(o){if(S.pttOn)return;S.pttOn=true;S._pttO=o;S._pttRetry=false;M.hold=true;M.cut();V.hold=true;V.stop();S._sess();clearTimeout(S._rt);clearTimeout(S._wt);
+  S.addLog('PTT','naciśnięto – metronom i lektor zatrzymane');o.ui('przygotowuję mikrofon…');await new Promise(r=>setTimeout(r,300));if(!S.pttOn)return;
+  S.paused=false;S.winUntil=Date.now()+o.ms+1000;const ok=await S._pttStart();if(!S.pttOn)return;
+  if(ok){o.ui('słucham… powiedz komendę');S.addLog('PTT','słucham')}
+  clearTimeout(S._pttT);S._pttT=setTimeout(()=>S.pttEnd(null,'nie rozpoznano – cisza przez '+Math.round(o.ms/1000)+' s'),o.ms)},
+ async _pttStart(){const N=plug('RkoNative');
+  if(isNative&&N&&N.srRestart){if(!S._lis){S._lis=true;try{N.addListener('sr',ev=>S._ev(ev))}catch(e){}}
+   for(let k=0;k<2;k++){try{await TO(N.srRestart({language:'pl-PL'}),3000);S.mode='native';S.running=true;return true}catch(e){const m=String(e&&e.message||e);S.addLog('błąd','PTT srRestart: '+m);
+     if(k===0){S._pttO.ui('błąd: '+(ERR[m]||m)+' – ponawiam…');await new Promise(r=>setTimeout(r,500))}else{S.pttEnd(null,'błąd: '+(ERR[m]||m));return false}}}}
+  // przeglądarka / PWA
+  if(!S.running){await S.start();return S.running}if(S.mode==='web'&&S.web&&!S.webOn){try{S.web.start();S.webOn=true}catch(e){}}return true},
+ _pttErr(code,msg){const txt=ERR[code]||('błąd '+code+(msg?' '+msg:''));S.errors[code]=(S.errors[code]||0)+1;S.addLog('PTT błąd '+code,txt);
+  if(QUIET_ERR.includes(code)){try{S._pttO.ui('('+txt+') – mów dalej…')}catch(e){}return true}
+  if(code===9||code==='not-allowed'){S.pttEnd(null,'błąd 9: brak uprawnienia do mikrofonu');return true}
+  if(!S._pttRetry){S._pttRetry=true;try{S._pttO.ui('błąd '+code+': '+txt+' – ponawiam…')}catch(e){}setTimeout(()=>{if(S.pttOn)S._pttStart()},400);return true}
+  S.pttEnd(null,'błąd '+code+': '+txt);return true},
+ pttEnd(alts,why){if(!S.pttOn)return;S.pttOn=false;clearTimeout(S._pttT);const o=S._pttO;S._pttO=null;S.winUntil=0;
+  if(S.windowMode)S.pause().catch(()=>{});M.hold=false;V.hold=false;S.addLog('PTT','koniec: '+(alts?alts[0]:why));
+  try{o.done(alts,why)}catch(e){}if(V.queue.length&&!V.speaking)V._run()},
  // awaryjnie: wtyczka community (bez trybu offline), restart natychmiast, bez narastających przerw
  async _plugin(SR){while(S.running){S.set(V.speaking?'słucham (lektor mówi)':'słucham');
    try{const r=await SR.start({language:'pl-PL',maxResults:5,partialResults:false,popup:false});if(r&&r.matches&&r.matches.length)S._final(r.matches,null);else S._err(7)}
@@ -130,7 +154,8 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
 const M={want:false,rate:110,vol:0.15,next:0,nodes:[],timer:null,clicks:0,duckUntil:0,userOn:false,userT:0,USER_CAP:4000,
  duck(ms){M.duckUntil=Math.max(M.duckUntil,Date.now()+ms)},
  userSpeaking(on,after){const n=Date.now();if(on){M.userOn=true;M.userT=n}else{M.userOn=false;if(after)M.duck(after)}},
- ducked(){const n=Date.now();return n<M.duckUntil||(M.userOn&&n-M.userT<M.USER_CAP)},
+ hold:false,
+ ducked(){const n=Date.now();return M.hold||S.pttOn||S.listening()||n<M.duckUntil||(M.userOn&&n-M.userT<M.USER_CAP)},
  start(){if(!M.timer)M.timer=setInterval(M.tick,25)},
  active(){return M.want&&!V.speaking&&!M.ducked()&&V.ctx&&V.ctx.state==='running'},
  useNative:false,

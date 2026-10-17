@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). */
 (function(root){
 'use strict';
-const VERSION='1.9.5';
+const VERSION='1.9.6';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -542,6 +542,11 @@ P.htTreat=function(i){const n=HT[i][0];if(n==='hiperkaliemia'){this.ask('calcium
  if(this.s.sim&&this.s.simCause===n)this.s.simTreated=true};
 // wejście z mowy/przycisku
 P.ctx=function(){const s=this.s,c=s&&s.cur;return {rhythm:!!(s&&s.mode==='arrest'&&c&&['rhythm','rhyAsy','pulse'].includes(c.id)),confirm:!!c}};
+// v1.9.6: komendy globalne przycisku mikrofonu – niezależne od bieżącego pytania
+const PTTC=[[/migotan|\bvf\b|\bwf\b|\bpvt\b|\bvt\b|czestoskurcz|do defibrylacji/,'migotanie komór','migotanie komór / VF / pVT'],[/asystol|asystoli|linia prosta/,'asystolia','asystolia'],
+ [/\bpea\b|\bp ?e ?a\b|\bpe a\b|\bpa\b|\bpija\b|bez tetna|aktywnosc elektryczna/,'PEA','PEA – aktywność elektryczna bez tętna'],[/\brosc\b|\brosk\b|powrot krazenia|powrot spontanicznego/,'ROSC','ROSC – powrót krążenia'],
+ [/\btetno\b|jest tetno|tetno jest|wyczuwalne tetno/,'tętno','tętno'],[/^(tak|tak jest|potwierdzam)$/,'tak','TAK'],[/^(nie|nie ma)$/,'nie','NIE']];
+function pttMatch(alts){for(const a of [].concat(alts||[])){const t=norm(a);if(!t)continue;if(/nie do defibrylacji|brak wskazan|nie defibryl/.test(t))return {say:'nie do defibrylacji',label:'rytm nie do defibrylacji'};if(/\bnie ma tetna\b|\bbrak tetna\b/.test(t))return {say:'PEA',label:PTTC[2][2]};for(const[re,say,label]of PTTC)if(re.test(t))return {say,label}}return null}
 function recKey(r,alts){const t=norm([].concat(alts)[0]||'');switch(r.cmd){case 'shockable':return /\bvt\b|pvt|czestoskurcz/.test(t)?'recVT':'recVF';case 'nonshock':return /asyst/.test(t)?'recAsy':/pea|aktywn|bez tetna/.test(t)?'recPEA':null;case 'nopulse':return 'recPEA';case 'pulse':return 'recPulse';case 'rosc':return 'recRosc'}return null}
 P.input=function(alts,src){const r0=interpret(alts,this.ctx());this._ack=r0.cmd==='ack';this._ackSaid=false;const s=this.s;const snap=s&&s.mode!=='idle'&&s.mode!=='ended'?JSON.stringify(s):null;const n0=s&&s.log?s.log.length:0;this._src=src||null;
  // v1.9.5: komenda głosowa (mikrofon PTT) w dowolnej chwili przełącza algorytm; potwierdzenie lektorem + COFNIJ 5 s
@@ -716,6 +721,6 @@ function anonymize(t){return String(t||'')
  .replace(/\b\d{2}-\d{3}\b/g,'[kod usunięty]')
  .replace(/\b(ul\.|ulica|ulicy|al\.|aleja|alei|os\.|osiedle|osiedlu|pl\.|plac|placu|zam\.|zamieszkał[ya]?|zamieszkała)\s+[^\n,;.]*/gi,'[adres usunięty]')
  .replace(/\b([Pp]an|[Pp]ani|[Pp]acjent|[Pp]acjentka|[Nn]azwisko|[Ii]mię)\s*:?\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+(\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)?/g,(m,a)=>a+' [dane usunięte]')}
-const API={mgW,expectedBtn,sayify,numWords,anonymize,AI_PROMPT,buttonsFor,rhyButtons,RHY,adrText,RHY_NAME,labOf,btnKey,PressState,BTN,lev,fuzzyMatch,FUZZY,roscRhyOf,echoOf,BARGE_MIN,minText,insText,HK_GLU,amioDrip,amioDripSay,numW,amioCalc,amioSay,amioCount,hepCalc,hepBolusText,hepPrepText,HEPB,parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
+const API={pttMatch,mgW,expectedBtn,sayify,numWords,anonymize,AI_PROMPT,buttonsFor,rhyButtons,RHY,adrText,RHY_NAME,labOf,btnKey,PressState,BTN,lev,fuzzyMatch,FUZZY,roscRhyOf,echoOf,BARGE_MIN,minText,insText,HK_GLU,amioDrip,amioDripSay,numW,amioCalc,amioSay,amioCount,hepCalc,hepBolusText,hepPrepText,HEPB,parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
 if(typeof module!=='undefined')module.exports=API;else root.RKO=API;
 })(this);

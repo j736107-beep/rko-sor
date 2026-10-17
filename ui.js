@@ -36,7 +36,7 @@ function begin(sim,resumeState){if(sim&&!needFull('Symulacja'))return;if(typeof 
  Ears.windowMode=true;if(resumeState){E.resume(resumeState)}else E.start({sim,email:cfg.email,syr:cfg.syr?+cfg.syr:null});
  Ears.classify=alts=>RKO.interpret(alts,E&&E.s&&E.s.mode!=='idle'?E.ctx():{});
  $('#simbar').classList.toggle('hide',!E.s.sim);$('#chg').classList.toggle('hide',!E.s.sim);
- Metro.start();show('run');wake(true);Metro.useNative=true;nat('action',{on:true});if(cfg.pin==='1')nat('pin',{on:true});$('#wywB').classList.toggle('hide',!isFull());Ears.onResult=(alts,conf,src)=>{const p=PTT.on;if(!p&&!Ears.inWindow()){Ears.mark('poza oknem odpowiedzi – pominięto');return}if(p){pttSet(false);handle(alts,true,conf,'ptt');showRec();return}handle(alts,false,conf)};Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
+ Metro.start();show('run');wake(true);Metro.useNative=true;nat('action',{on:true});if(cfg.pin==='1')nat('pin',{on:true});$('#wywB').classList.toggle('hide',!isFull());Ears.onResult=(alts,conf,src)=>{if(!Ears.inWindow()){Ears.mark('poza oknem odpowiedzi – pominięto');return}handle(alts,false,conf)};Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
 $('#go').onclick=()=>{if(E&&E.s&&E.s.mode!=='idle'&&E.s.mode!=='ended'){show('run');return}begin(false)};$('#sim').onclick=()=>begin(true);
 // mikrofon dopiero po pierwszym komunikacie (start rozpoznawania zabiera fokus audio na Androidzie)
 // v1.6.2: mikrofon startuje natychmiast po końcu pierwszego nagrania (pętla natywna i tak czeka, aż lektor zamilknie)
@@ -66,11 +66,15 @@ let rhyKey=null;function renderRhy(act){const box=$('#rhyb');if(!box||!E)return;
  box.querySelectorAll('button').forEach(b=>b.classList.toggle('act',act!=null&&b.dataset.c===act))}
 // v1.9: COFNIJ przez 5 s po każdym potwierdzeniu
 function renderUndo(){const u=$('#undo');if(!E||!E.canUndo){u.classList.add('hide');return}const ok=E.canUndo();u.classList.toggle('hide',!ok);if(ok){const l=Math.max(0,5-Math.floor((Date.now()-E.undoSnap.t)/1000));$('#undoB').textContent='COFNIJ ('+l+')';$('#undoT').textContent=E.undoSnap.label.slice(0,60)}}
-// v1.9.5: duży przycisk mikrofonu (naciśnij i mów) – komendy globalne w każdej chwili
-const PTT={on:false,until:0};function pttSet(on){PTT.on=on;const b=$('#ptt');if(!b)return;b.classList.toggle('on',on);$('#pttL').textContent=on?'SŁUCHAM…':'MÓW'}
-$('#ptt').onclick=async()=>{if(!E)return;if(PTT.on){pttSet(false);try{Ears.closeWindow()}catch(e){}return}Voice.stop&&Voice.stop();pttSet(true);PTT.until=Date.now()+8000;try{if(!Ears.running)await Ears.start();Ears.openWindow(8000)}catch(e){}};
-setInterval(()=>{if(PTT.on&&Date.now()>PTT.until)pttSet(false)},300);
-function showRec(){if(E&&E.lastRec&&Date.now()-E.lastRec.t<6000){$('#recog').textContent=E.lastRec.text+' — COFNIJ przez 5 s, jeśli źle';$('#recog').classList.add('ok')}}
+// v1.9.6: przycisk mikrofonu – metronom i lektor stop, świeży rozpoznawacz, wynik pośredni, transkrypcja na żywo
+const PTT={get on(){return Ears.pttOn}};function pttSet(on){const b=$('#ptt');if(!b)return;b.classList.toggle('on',on);$('#pttL').textContent=on?'SŁUCHAM…':'MÓW'}
+function pttUi(t,cls){const r=$('#recog');if(!r)return;r.textContent=t;r.className='recog'+(cls?' '+cls:'')}
+function pttPress(onCmd){if(Ears.pttOn){Ears.pttEnd(null,'anulowano');return}Voice.unlock&&Voice.unlock();pttSet(true);pttUi('przygotowuję mikrofon…');
+ Ears.ptt({ms:8000,match:a=>RKO.pttMatch(a),ui:t=>pttUi(t,'live'),done:(alts,why)=>{pttSet(false);if(!alts){pttUi(why,'err');return}const m=RKO.pttMatch(alts);
+  if(m){pttUi('słyszę: „'+alts[0]+'” → '+m.label,'ok');onCmd(m,alts)}else{pttUi('słyszę: „'+alts[0]+'” → nie rozpoznano komendy','err');onCmd(null,alts)}}})}
+$('#ptt').onclick=()=>{if(!E)return;pttPress((m,alts)=>{if(m){handle([m.say],true,null,'ptt');showRec()}else handle(alts,true,null,'ptt')})};
+window.__pttPress=pttPress;
+function showRec(){if(E&&E.lastRec&&Date.now()-E.lastRec.t<6000){const r=$('#recog');r.textContent=r.textContent+' · '+E.lastRec.text+' — COFNIJ przez 5 s, jeśli źle';r.classList.add('ok')}}
 $('#undoB').onclick=()=>{if(!E)return;Voice.stop();Ears.addLog('przycisk','COFNIJ');if(E.undo())toast('Cofnięto');render()};
 // v1.9: wywiad (tekst, dyktowanie klawiaturą)
 let wywTarget=null;function openWyw(target){wywTarget=target;$('#wywT').value=target.wywiad||'';$('#wyw').classList.remove('hide');setTimeout(()=>$('#wywT').focus(),100)}

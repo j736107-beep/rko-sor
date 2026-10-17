@@ -28,6 +28,14 @@ const T=[
   if(ok)return P('rozpoznano „'+got.t+'” → '+(got.c==='yes'?'TAK':'ASYSTOLIA'));const errs=Object.entries(Ears.errors).filter(([k])=>!JSON.parse(e0)[k]||JSON.parse(e0)[k]<Ears.errors[k]).map(([k])=>k);
   return F(heard?'usłyszano „'+heard+'”, ale nie rozpoznano słowa':errs.length?'błąd usługi mowy: '+errs.map(k=>k+' ('+(Ears.status||'')+')').join(', '):'nic nie usłyszano w 10 s (sprawdź usługę mowy Google, język polski)',errs[0]?'SR_'+errs[0]:heard?'SR_NOMATCH':'SR_SILENCE');
   function restore(){Ears.classify=saved.c;Ears.onResult=saved.r;Ears.onHeard=saved.h;Ears.windowMode=saved.w}}],
+ ['micmetro','Mikrofon z metronomem',async id=>{if(R().active())return F('niedostępne w trakcie akcji – zakończ akcję','BUSY');const n=N();if(n&&n.action)await n.action({on:true});Voice.unlock();
+  const nat=Metro.useNative;Metro.useNative=!!(n&&n.metro);Metro.start();Metro.rate=110;Metro.vol=0.3;Metro.want=true;const k0=Metro.clicks;await countdown(id,3,'Metronom gra jak w akcji');
+  let held=null,heard='',m=null,why='';const done=new Promise(ok=>{Ears.ptt({ms:8000,match:a=>RKO.pttMatch(a),ui:t=>{heard=t;live(id,'Powiedz: „migotanie komór” · '+t)},done:(alts,w)=>{why=w;if(alts){heard=alts[0];m=RKO.pttMatch(alts)}ok()}})});
+  await sleep(700);held=Metro.ducked()&&(!Metro.nat()||/^false/.test(Metro._ns||''));const k1=Metro.clicks;await done;const k2=Metro.clicks;
+  Metro.want=false;Metro.cut();Metro.useNative=nat;if(n&&n.action)await n.action({on:false});const silent=!Metro.nat()?k2-k1<=1:held;
+  if(!held||!silent)return F('metronom NIE zamilkł podczas słuchania (kliknięcia w czasie słuchania: '+(k2-k1)+')','MM_METRO');
+  if(m&&m.say==='migotanie komór')return P('metronom zatrzymany na czas słuchania · rozpoznano „'+heard+'” → '+m.label);
+  return F(heard?'metronom zatrzymany, usłyszano „'+heard+'”, ale nie rozpoznano komendy':'metronom zatrzymany, ale '+(why||'nic nie usłyszano'),heard?'MM_NOMATCH':'MM_SILENCE')}],
  ['undo','Przyciski / COFNIJ',async id=>{const E=new RKO.Engine({out:()=>{},alarm:()=>{}});E.start();live(id,'Symulacja: ASYSTOLIA (przycisk) → TAK → COFNIJ');E.input(['asystolia'],'przycisk');await sleep(300);E.input(['tak'],'przycisk');await sleep(300);
   if(E.s.adr.length!==1)return F('przycisk TAK nie zapisał adrenaliny','B_TAK');if(!E.canUndo())return F('brak COFNIJ po potwierdzeniu','B_UNDO');E.undo();if(E.s.adr.length!==0)return F('COFNIJ nie cofnął zapisu','B_UNDO2');
   if(!E.s.log.some(e=>e.src==='przycisk'))return F('brak zapisu źródła „przycisk”','B_SRC');return P('ASYSTOLIA → TAK zapisane (przycisk), COFNIJ cofnął')}],
