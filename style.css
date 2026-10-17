@@ -21,3 +21,5 @@ label{display:block;margin:10px 0}input,select{display:block;width:100%;font:inh
 #rlist .card{display:flex;justify-content:space-between;gap:6px;align-items:center}
 @media print{@page{size:A4;margin:12mm}body{background:#fff}.scr{display:none!important}#report{display:block!important;padding:0}.noprint{display:none!important}#rep{padding:0;margin:0}.pb{page-break-before:always}}
 .said .old{opacity:.55;font-size:14px}
+
+.scenbtn{display:flex;gap:10px;margin:10px 0}.scenbtn button{flex:1;font-size:2rem;font-weight:800;padding:28px 6px;border-radius:14px;background:#1f6feb;color:#fff;border:0}.scenbtn.hide{display:none}.ears.on{background:#1a7f37;color:#fff;border-radius:8px;padding:2px 8px}.heard{font-size:1.05rem;min-height:1.4em}

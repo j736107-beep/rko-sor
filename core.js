@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). Autor: Wujek Fido. */
 (function(root){
 'use strict';
-const VERSION='1.6.1';
+const VERSION='1.6.2';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -58,7 +58,7 @@ const CMDS=[
  ['organised',/rytm zatokowy|zatokowy|rytm zorganizowany|zorganizowany|wezlowy/],['intub',/intubacj|zaintubowan/],['usg',/\busg\b|u s g|pocus|ultrasonograf/],
  ['rosc',/\brosc\b|ros[ck]|powrot krazenia/],['arrest',/zatrzymanie/],['up',/zwieksz/],['keep',/utrzymaj/],['pause',/pauza|^stop\b|\bstop$/],['down',/zmniejsz/],['end',/zakoncz/],
  ['given',/podano|podane|podalem|podalam/],['bicarb',/wodoroweglan/],['change',/zmien rytm/],
- ['sor',/w sor|\bsor\b|na sor/],['brought',/przywiez/],['present',/^jest\b|jestem/],['checked',/sprawdzon|wykluczon/],['next',/dalej|nastepn|gotowe|gotowa|pomin/],['unknown',/nie wiem/],['kg',/kilogram|\bwaga\b|\bmasa\b/],
+ ['sor',/\bsor\w*|\bsorr?\b|\bsur\b|es o er|\bs o r\b|oddzial|tutaj|\bu nas\b|na miejscu|szpital|^tu$/],['brought',/przywiez|przywioz|przywiez|karetk|\bzrm\b|z r m|zet er em|zeterem|ratowni|pogotowi|\bwniesion|dowiezion/],['present',/^jest\b|jestem/],['checked',/sprawdzon|wykluczon/],['next',/dalej|nastepn|gotowe|gotowa|pomin/],['unknown',/nie wiem/],['kg',/kilogram|\bwaga\b|\bmasa\b/],
  ['s20',/dwadziescia|\b20\b/],['s50',/piecdziesiat|\b50\b/],
  ['yes',/^tak\b|\btak$|potwierdzam|zgadza/],['no',/^nie\b|\bnie$/]];
 function parsePair(text){const t=norm(text).replace(/\//g,' na ');const p=t.split(/ na /);if(p.length!==2)return null;const a=parseNumber(p[0]),b=parseNumber(p[1]);return a!=null&&b!=null?[a,b]:null}
@@ -289,7 +289,7 @@ P.answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd
  const s=this.s,c=r.cmd,yes=c==='yes'||c==='given'||c==='present'||c==='checked'||c==='ack',no=c==='no';
  const def=c==='default';const D=def?r.def:null;
  switch(q.id){
- case 'scen':if(c==='brought'||D==='brought'){s.scen='przywieziony';this.log('scenariusz','Pacjent przywieziony w trakcie RKO');this.ask('mins',SAY.mins,{def:'skip',tries:2})}
+ case 'scen':if(c==='sor'||c==='brought')this.say(SAY.ok,'ack');if(c==='brought'||D==='brought'){s.scen='przywieziony';this.log('scenariusz','Pacjent przywieziony w trakcie RKO');this.ask('mins',SAY.mins,{def:'skip',tries:2})}
   else if(c==='sor'||def){s.scen='SOR';this.log('scenariusz','NZK w SOR')}else return false;break;
  case 'mins':if(r.num!=null){this.setZrm(r.num,true);this.ask('zrmAdr',SAY.zrmAdr,{def:'skip',tries:1});this.ask('zrmShk',SAY.zrmShk,{def:'skip',tries:1});this.ask('zrmAmio',SAY.zrmAmio,{def:'skip',tries:1})}else if(!def)return false;break;
  case 'zrmAdr':if(r.num!=null){const n=Math.round(r.num),now=this.now();for(let k=0;k<n;k++)s.adr.push(now);this.log('lek','ZRM: adrenalina łącznie '+n+' mg',{drug:'adrenalina (ZRM)',dose:n+' mg',zrm:true});if(n>0)s.adrDue=now+3*60*MS}else if(!def&&!no)return false;break;

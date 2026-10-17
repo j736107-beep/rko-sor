@@ -25,22 +25,23 @@ function begin(sim,resumeState){Voice.unlock();E=engine();
  Metro.start();show('run');wake(true);Ears.onResult=(alts,conf)=>handle(alts,false,conf);Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
 $('#go').onclick=()=>begin(false);$('#sim').onclick=()=>begin(true);
 // mikrofon dopiero po pierwszym komunikacie (start rozpoznawania zabiera fokus audio na Androidzie)
-function startEarsAfterFirst(){let done=false;const go=()=>{if(done)return;done=true;Ears.start()};if(!Voice.speaking&&!Voice.queue.length){setTimeout(()=>{if(!Voice.speaking)go();else waitIdle()},600)}else waitIdle();
- function waitIdle(){const h=sp=>{if(!sp){Voice.hooks.splice(Voice.hooks.indexOf(h),1);setTimeout(go,300)}};Voice.hooks.push(h)}setTimeout(go,20000)}
+// v1.6.2: mikrofon startuje natychmiast po końcu pierwszego nagrania (pętla natywna i tak czeka, aż lektor zamilknie)
+function startEarsAfterFirst(){let done=false;const go=()=>{if(done)return;done=true;Ears.start()};if(!Voice.speaking&&!Voice.queue.length){setTimeout(()=>{if(!Voice.speaking)go();else waitClip()},200)}else waitClip();
+ function waitClip(){const h=sp=>{if(sp===false||sp==='clip'){Voice.hooks.splice(Voice.hooks.indexOf(h),1);go()}};Voice.hooks.push(h)}setTimeout(go,8000)}
 let pendingIn=[];Voice.hooks.push(sp=>{if(!sp&&pendingIn.length){const q=pendingIn;pendingIn=[];q.forEach(a=>handle(a,true))}});
 function handle(alts,direct,conf){if(!E)return;alts=[].concat(alts);
  if(!direct&&Voice.speaking){const b=RKO.bargeIn(alts[0],Voice.current,cfg.barge,conf);if(b==='ignore')return;if(b==='queue'){pendingIn.push(alts);$('#heard').textContent='w kolejce: '+alts[0];return}Voice.stop()}
 $('#heard').textContent='usłyszano: '+[].concat(alts)[0];const c=E.input(alts);
  if(c==='send'){if(E.s.mode==='ended')sendReport(E.s);else E.say('Raport wyślę po zakończeniu.')}
  if(E.s.mode==='ended')finished();render()}
-$$('.fb [data-c],.fb2 [data-c]').forEach(b=>b.onclick=()=>{if(RKO.bargeIn(b.dataset.c,'')==='interrupt')Voice.stop();handle([b.dataset.c],true)});
+$$('.fb [data-c],.fb2 [data-c],#scenbtn [data-c]').forEach(b=>b.onclick=()=>{if(RKO.bargeIn(b.dataset.c,'')==='interrupt')Voice.stop();handle([b.dataset.c],true)});
 // klawiatura liczb
 let pv='';const pg=$('.padg');['1','2','3','4','5','6','7','8','9','⌫','0','OK'].forEach(k=>{const b=document.createElement('button');b.textContent=k;b.onclick=()=>{if(k==='OK'){$('#pad').classList.add('hide');if(pv)handle([pv],true);pv=''}else if(k==='⌫')pv=pv.slice(0,-1);else pv+=k;$('#padv').textContent=pv||'\u00a0'};pg.appendChild(b)});
 $('#numB').onclick=()=>{pv='';$('#padv').textContent='\u00a0';$('#pad').classList.remove('hide')};
-Ears.onState=st=>{$('#ears').textContent='🎤 '+st};
+Ears.onState=st=>{const el=$('#ears');el.textContent='🎤 '+st;el.classList.toggle('on',/^słucham/.test(st))};Ears.onHeard=t=>{$('#heard').textContent='mikrofon: '+t};
 function mmss(ms){ms=Math.max(0,ms);const s=Math.floor(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
 function loop(){if(!E)return;E.tick();{const w=E.metroWanted({on:cfg.metro!=='0',lucas:cfg.metroLucas!=='0'});Metro.want=w>0;Metro.rate=+cfg.metroRate||110;Metro.vol=(+String(cfg.metroVol).replace(',','.')||0.3)*(w||1)}render()}
-function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')return;
+function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')return;{const sb=$('#scenbtn');if(sb)sb.classList.toggle('hide',!(s.cur&&s.cur.id==='scen')&&!E.has('scen'))}
  $('#modeL').textContent=s.mode==='rosc'?'PO ROSC':s.mode==='ended'?'ZAKOŃCZONO':(s.paused?'NZK – PAUZA':'NZK');
  $('#tTot').textContent=mmss((s.tEnd||now)-s.arrestT);
  const left=120000-(now-s.cycleT);$('#tCyc').textContent=s.mode==='arrest'?mmss(left).slice(1):'—';$('#tCyc').classList.toggle('warn',s.mode==='arrest'&&left<15000);

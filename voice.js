@@ -30,7 +30,7 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
  stop(){V.queue=[];V._cut=true;V.srcs.forEach(s=>{try{s.onended=null;s.stop()}catch(e){}});V.srcs=[];if(V._seqDone){const d=V._seqDone;V._seqDone=null;d()}
   try{V.audio.pause();V.audio.onended&&V.audio.onended()}catch(e){}if(root.speechSynthesis)speechSynthesis.cancel();const T=plug('TextToSpeech');if(T)T.stop().catch(()=>{})},
  async _run(){V.speaking=true;V.startedAt=Date.now();V.onState(true);
-  while(V.queue.length){const it=V.queue.shift();V.current=it.text;V._cut=false;for(const seg of V.plan(it.text)){if(V._cut)break;try{seg.clips?await V._seq(seg.clips):await V._tts(seg.tts)}catch(e){}}}
+  while(V.queue.length){const it=V.queue.shift();V.current=it.text;V._cut=false;for(const seg of V.plan(it.text)){if(V._cut)break;try{seg.clips?await V._seq(seg.clips):await V._tts(seg.tts)}catch(e){}}V.hooks.forEach(h=>{try{h('clip')}catch(e){}})}
   V.current='';V.speaking=false;V.endedAt=Date.now();V.onState(false)},
  async _seq(list){V.stats.clips+=list.length;if(V.startReady){const p=V.startReady;V.startReady=null;await Promise.race([p,new Promise(r=>setTimeout(r,1500))])}
   if(V.ctx){try{if(V.ctx.state!=='running')await V.ctx.resume();const bs=await Promise.all(list.map(f=>f?V.buf(f):null));if(V._cut)return;
@@ -46,24 +46,25 @@ const V={clips:{},speaking:false,queue:[],muted:false,audio:null,ctx:null,bufs:n
 // ---- rozpoznawanie mowy ----
 // barge: 'off' | 'min' (tylko „stop”, „wyładowano”) | 'full'. Na Androidzie start rozpoznawania w trakcie mowy lektora zabiera fokus audio
 // (lektor się zacina), więc poza trybem 'full' rozpoznawanie czeka, aż lektor skończy.
-const S={running:false,onResult:()=>{},onState:()=>{},status:'off',barge:'min',fails:0,
+const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},status:'off',barge:'min',fails:0,
  listenWhileSpeaking(){return S.barge==='full'||(!isNative&&S.barge==='min')},
  async start(){S.running=true;const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:true}).catch(()=>{});const SR=plug('SpeechRecognition');
   if(SR){try{const p=await SR.checkPermissions();if(p.speechRecognition!=='granted')await SR.requestPermissions()}catch(e){}S._native(SR);return}
   const W=root.SpeechRecognition||root.webkitSpeechRecognition;if(!W){S.set('brak rozpoznawania mowy – użyj przycisków');return}
-  const r=new W();r.lang='pl-PL';r.continuous=true;r.interimResults=false;r.maxAlternatives=5;S.web=r;
-  r.onresult=e=>{const res=e.results[e.results.length-1];S.fails=0;S.emit([...res].map(a=>a.transcript),res[0]&&res[0].confidence)};
-  r.onend=()=>{S.webOn=false;if(S.running)S._webRestart()};r.onerror=e=>{S.fails++;S.set('mikrofon: '+e.error)};
+  const r=new W();r.lang='pl-PL';r.continuous=true;r.interimResults=true;r.maxAlternatives=5;S.web=r;S.done=new Set();
+  r.onresult=e=>{S.fails=0;for(let i=e.resultIndex;i<e.results.length;i++){const res=e.results[i],k=i+':'+e.timeStamp;if(S.done.has(i))continue;const alts=[...res].map(a=>a.transcript);
+   if(res.isFinal){S.done.add(i);S.emit(alts,res[0]&&res[0].confidence)}else{try{S.onHeard('… '+alts[0])}catch(x){}if(root.RKO&&['sor','brought'].includes(root.RKO.interpret(alts).cmd)){S.done.add(i);S.emit(alts,null)}}}};
+  r.onend=()=>{S.webOn=false;S.done=new Set();if(S.running)S._webRestart()};r.onerror=e=>{S.fails++;S.set('mikrofon: '+e.error)};
   V.hooks.push(sp=>{if(!sp&&S.running&&S.web&&!S.webOn)S._webRestart()});
   try{r.start();S.webOn=true;S.set('słucham')}catch(e){S.set('mikrofon niedostępny')}},
  _webRestart(){if(!S.running||S.webOn)return;if(V.speaking&&!S.listenWhileSpeaking())return;const d=Math.min(2000,300+S.fails*300);clearTimeout(S._wt);S._wt=setTimeout(()=>{if(!S.running||S.webOn)return;if(V.speaking&&!S.listenWhileSpeaking())return;try{S.web.start();S.webOn=true}catch(e){}},d)},
- emit(alts,conf){if(!alts||!alts.length)return;if(root.RKO&&/^((tik|tyk|klik|puk|tuk|tup)\s*)+$/.test(root.RKO.norm(alts[0]))&&root.Metro&&root.Metro.want)return;
+ emit(alts,conf){if(!alts||!alts.length)return;try{S.onHeard(alts[0])}catch(e){}if(root.RKO&&/^((tik|tyk|klik|puk|tuk|tup)\s*)+$/.test(root.RKO.norm(alts[0]))&&root.Metro&&root.Metro.want)return;
   // osłona przed echem: zaraz po starcie mowy i do 0,4 s po jej końcu
   const now=Date.now();if(V.speaking&&now-V.startedAt<400)return;if(!V.speaking&&now-V.endedAt<250&&root.RKO&&root.RKO.echoOf(root.RKO.norm(alts[0]),V.lastText||''))return;
   S.onResult(alts,conf)},
  set(st){S.status=st;S.onState(st)},
  async _native(SR){while(S.running){
-   if(V.speaking&&!S.listenWhileSpeaking()){S.set('czekam, lektor mówi');await new Promise(r=>setTimeout(r,120));continue}
+   if(V.speaking&&!S.listenWhileSpeaking()){S.set('czekam, lektor mówi');await new Promise(r=>setTimeout(r,50));continue}
    S.set(V.speaking?'słucham (lektor mówi)':'słucham');
    try{const r=await SR.start({language:'pl-PL',maxResults:5,partialResults:false,popup:false});if(r&&r.matches&&r.matches.length){S.fails=0;S.emit(r.matches,null)}else S.fails++}
    catch(e){S.fails++}
