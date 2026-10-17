@@ -2,7 +2,7 @@
 (function(){
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const LS={get:(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const cfg=Object.assign({email:'',energy:'mindray',syr:'',paceEl:'ap',atroAmp:'0.5',iso:'1/50',dopa:'200/50',adrinf:'1/50',sayConc:'1',pacer:'mindray',fentConc:'50',midaConc:'1',midaAmp:'5/1',atroDose:'0.5',stacked:'0',barge:'min',amioMode:'drip',dropSet:'20',hep:'25000/50',hepAmp:'5000',amioInf:'900/50'},LS.get('rko_cfg',{}));
+const cfg=Object.assign({email:'',energy:'mindray',syr:'',paceEl:'ap',atroAmp:'0.5',iso:'1/50',dopa:'200/50',adrinf:'1/50',sayConc:'1',pacer:'mindray',fentConc:'50',midaConc:'1',midaAmp:'5/1',atroDose:'0.5',stacked:'0',metro:'1',metroRate:'110',metroVol:'0.3',metroLucas:'0',barge:'min',amioMode:'drip',dropSet:'20',hep:'25000/50',hepAmp:'5000',amioInf:'900/50'},LS.get('rko_cfg',{}));
 let E=null,timer=null,wl=null,said=[];
 function show(id){$$('.scr').forEach(s=>s.classList.toggle('on',s.id===id));if(id==='reports')renderList();if(id==='help')renderHelp();window.scrollTo(0,0)}
 $$('[data-s]').forEach(b=>b.onclick=()=>show(b.dataset.s));
@@ -11,7 +11,7 @@ $('#ver').textContent=RKO.VERSION;
 for(const k in RKO.ENERGY_LABEL){const o=document.createElement('option');o.value=k;o.textContent=RKO.ENERGY_LABEL[k];$('#energy').appendChild(o)}
 $('#email').value=cfg.email;$('#energy').value=cfg.energy;$('#syr').value=cfg.syr;
 $('#paceEl').value=cfg.paceEl;for(const k in RKO.PACEMAX){const o=document.createElement('option');o.value=k;o.textContent=RKO.PACEMAX[k].label;$('#pacer').appendChild(o)}
-const KS=['atroAmp','iso','dopa','adrinf','sayConc','pacer','fentConc','midaConc','midaAmp','atroDose','stacked','hep','hepAmp','amioMode','dropSet','barge'];KS.forEach(k=>$('#'+k).value=cfg[k]);['email','energy','syr','paceEl'].concat(KS).forEach(k=>$('#'+k).onchange=()=>{cfg[k]=$('#'+k).value.trim();LS.set('rko_cfg',cfg)});
+const KS=['atroAmp','iso','dopa','adrinf','sayConc','pacer','fentConc','midaConc','midaAmp','atroDose','stacked','hep','hepAmp','amioMode','dropSet','barge','metro','metroRate','metroVol','metroLucas'];KS.forEach(k=>$('#'+k).value=cfg[k]);['email','energy','syr','paceEl'].concat(KS).forEach(k=>$('#'+k).onchange=()=>{cfg[k]=$('#'+k).value.trim();LS.set('rko_cfg',cfg)});
 function net(){$('#net').textContent=navigator.onLine?'☁ sieć dostępna':'✈ offline';if(navigator.onLine)flushQueue(true)}
 addEventListener('online',net);addEventListener('offline',net);net();
 // ---- start ----
@@ -22,7 +22,7 @@ function engine(){return new RKO.Engine({energy:cfg.energy,paceEl:cfg.paceEl,fen
 function begin(sim,resumeState){Voice.unlock();E=engine();
  if(resumeState){E.s=resumeState;E.s.q=[];E.s.cur=null;E.say('Wznawiam zapis.')}else E.start({sim,email:cfg.email,syr:cfg.syr?+cfg.syr:null});
  $('#simbar').classList.toggle('hide',!E.s.sim);$('#chg').classList.toggle('hide',!E.s.sim);
- show('run');wake(true);Ears.onResult=(alts,conf)=>handle(alts,false,conf);Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
+ Metro.start();show('run');wake(true);Ears.onResult=(alts,conf)=>handle(alts,false,conf);Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
 $('#go').onclick=()=>begin(false);$('#sim').onclick=()=>begin(true);
 // mikrofon dopiero po pierwszym komunikacie (start rozpoznawania zabiera fokus audio na Androidzie)
 function startEarsAfterFirst(){let done=false;const go=()=>{if(done)return;done=true;Ears.start()};if(!Voice.speaking&&!Voice.queue.length){setTimeout(()=>{if(!Voice.speaking)go();else waitIdle()},600)}else waitIdle();
@@ -39,7 +39,7 @@ let pv='';const pg=$('.padg');['1','2','3','4','5','6','7','8','9','⌫','0','OK
 $('#numB').onclick=()=>{pv='';$('#padv').textContent='\u00a0';$('#pad').classList.remove('hide')};
 Ears.onState=st=>{$('#ears').textContent='🎤 '+st};
 function mmss(ms){ms=Math.max(0,ms);const s=Math.floor(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
-function loop(){if(!E)return;E.tick();render()}
+function loop(){if(!E)return;E.tick();Metro.want=!!E.metroWanted({on:cfg.metro!=='0',lucas:cfg.metroLucas==='1'});Metro.rate=+cfg.metroRate||110;Metro.vol=+String(cfg.metroVol).replace(',','.')||0.3;render()}
 function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')return;
  $('#modeL').textContent=s.mode==='rosc'?'PO ROSC':s.mode==='ended'?'ZAKOŃCZONO':(s.paused?'NZK – PAUZA':'NZK');
  $('#tTot').textContent=mmss((s.tEnd||now)-s.arrestT);
@@ -51,7 +51,7 @@ function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')ret
  if(s.cur)nx+='\n❓ '+s.cur.text.slice(0,70);
  if(s.sim&&s.mode==='arrest')nx='Monitor (symulacja): '+(s.simRhythm||'?')+'\n'+nx;
  $('#next').textContent=nx;$('#next').classList.toggle('due',due)}
-function finished(){clearInterval(timer);Ears.stop();wake(false);const s=E.s;LS.set('rko_cur',null);
+function finished(){clearInterval(timer);Metro.want=false;Metro.cut();Ears.stop();wake(false);const s=E.s;LS.set('rko_cur',null);
  const list=LS.get('rko_reports',[]);s.id=s.id||('R'+s.t0);if(!list.find(r=>r.id===s.id))list.unshift(s);LS.set('rko_reports',list.slice(0,30));
  setTimeout(()=>{showReport(s)},1200)}
 // ---- wznowienie po zamknięciu ----
@@ -106,7 +106,7 @@ $('#selftest').onclick=async()=>{const o=[];Voice.unlock();o.push('Nagrania lekt
  const SR=plug('SpeechRecognition');if(SR){try{const a=await SR.available();o.push('Rozpoznawanie mowy: '+(a.available?'dostępne':'BRAK'));const p=await SR.requestPermissions();o.push('Mikrofon: '+p.speechRecognition)}catch(e){o.push('Mikrofon: błąd '+e.message)}}
  else o.push('Rozpoznawanie mowy (przeglądarka): '+((window.SpeechRecognition||window.webkitSpeechRecognition)?'dostępne (Chrome wymaga sieci)':'brak – tylko przyciski'));
  $('#stres').textContent=o.join('\n')};
-function renderHelp(){$('#helpc').innerHTML=`<h2>Komendy głosowe</h2><p class="small">TAK · NIE · PODANO · „adrenalina podano” · „amiodaron/lidokaina podano” · rytm: „migotanie komór”, „VF”, „częstoskurcz komorowy bez tętna”, „asystolia”, „PEA”, „rozkojarzenie”, „rytm zatokowy”, „jest tętno”, „bradykardia” · „defibrylacja wykonana”/„wyładowano” · „nie mogę uciskać”/„jestem sam” · „intubacja” · „USG” · „ROSC” · „zatrzymanie” · „zwiększ”/„utrzymaj” · liczby słownie („dziewięćdziesiąt”) · „wodorowęglan” · „pauza”/„stop”/„dalej”, „zmniejsz”, „wlew heparyny”, „wlew amiodaronu”, „wlew adrenaliny”, „masa 80 kilogramów”, ciśnienie „120 na 80” · „powtórz”, „powtórz ostatnie polecenie”, „odtwórz instrukcję” · „zakończ” → „tak, zakończ” · „wyślij na moją skrzynkę”.</p>
+function renderHelp(){$('#helpc').innerHTML=`<h2>Komendy głosowe</h2><p class="small">TAK · OKEJ · DOBRZE · ZROBIONE (potwierdzenie bieżącego polecenia; zakończenie tylko „tak, zakończ”) · NIE · PODANO · „adrenalina podano” · „amiodaron/lidokaina podano” · rytm: „migotanie komór”, „VF”, „częstoskurcz komorowy bez tętna”, „asystolia”, „PEA”, „rozkojarzenie”, „rytm zatokowy”, „jest tętno”, „bradykardia” · „defibrylacja wykonana”/„wyładowano” · „nie mogę uciskać”/„jestem sam” · „intubacja” · „USG” · „ROSC” · „zatrzymanie” · „zwiększ”/„utrzymaj” · liczby słownie („dziewięćdziesiąt”) · „wodorowęglan” · „pauza”/„stop”/„dalej”, „zmniejsz”, „wlew heparyny”, „wlew amiodaronu”, „wlew adrenaliny”, „masa 80 kilogramów”, ciśnienie „120 na 80” · „powtórz”, „powtórz ostatnie polecenie”, „odtwórz instrukcję” · „zakończ” → „tak, zakończ” · „wyślij na moją skrzynkę”.</p>
 <h2>Wysyłka raportu – instrukcja dla lekarza</h2><ol class="small"><li>Ustawienia → „Mój e-mail” → wpisz swój adres (raz).</li><li>Po zakończeniu: przycisk „WYŚLIJ” albo komenda „wyślij na moją skrzynkę”.</li><li>Otworzy się program poczty z adresem i załącznikiem DOCX – zatwierdź „Wyślij”.</li><li>Bez sieci raport czeka w kolejce (Raporty → „Wyślij kolejkę teraz”).</li><li>Na komputerze: otwórz pocztę lub chmurę tego samego konta i pobierz plik.</li></ol>
 <p class="small">Raport nie zawiera nazwiska ani PESEL. Zgodność z RODO – DO WERYFIKACJI z IOD.</p>`}
 if('serviceWorker' in navigator&&!window.isNative&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});

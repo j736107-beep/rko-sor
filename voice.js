@@ -57,7 +57,7 @@ const S={running:false,onResult:()=>{},onState:()=>{},status:'off',barge:'min',f
   V.hooks.push(sp=>{if(!sp&&S.running&&S.web&&!S.webOn)S._webRestart()});
   try{r.start();S.webOn=true;S.set('słucham')}catch(e){S.set('mikrofon niedostępny')}},
  _webRestart(){if(!S.running||S.webOn)return;if(V.speaking&&!S.listenWhileSpeaking())return;const d=Math.min(2000,300+S.fails*300);clearTimeout(S._wt);S._wt=setTimeout(()=>{if(!S.running||S.webOn)return;if(V.speaking&&!S.listenWhileSpeaking())return;try{S.web.start();S.webOn=true}catch(e){}},d)},
- emit(alts,conf){if(!alts||!alts.length)return;
+ emit(alts,conf){if(!alts||!alts.length)return;if(root.RKO&&/^((tik|tyk|klik|puk|tuk|tup)\s*)+$/.test(root.RKO.norm(alts[0]))&&root.Metro&&root.Metro.want)return;
   // osłona przed echem: zaraz po starcie mowy i do 0,4 s po jej końcu
   const now=Date.now();if(V.speaking&&now-V.startedAt<400)return;if(!V.speaking&&now-V.endedAt<250&&root.RKO&&root.RKO.echoOf(root.RKO.norm(alts[0]),V.lastText||''))return;
   S.onResult(alts,conf)},
@@ -69,7 +69,17 @@ const S={running:false,onResult:()=>{},onState:()=>{},status:'off',barge:'min',f
    catch(e){S.fails++}
    if(S.fails)await new Promise(r=>setTimeout(r,Math.min(1500,200*S.fails)))}},
  stop(){S.running=false;const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:false}).catch(()=>{});const SR=plug('SpeechRecognition');if(SR)SR.stop().catch(()=>{});if(S.web)try{S.web.abort()}catch(e){}S.set('off')}};
-V.hooks=[];V.onState=sp=>{if(sp===false)V.lastText=V._lt;V.hooks.forEach(h=>{try{h(sp)}catch(e){}})};
+// ---- metronom uciśnięć (WebAudio, planowany z wyprzedzeniem – bez przerw); milknie, gdy mówi lektor ----
+const M={want:false,rate:110,vol:0.3,next:0,nodes:[],timer:null,clicks:0,
+ start(){if(!M.timer)M.timer=setInterval(M.tick,25)},
+ active(){return M.want&&!V.speaking&&V.ctx&&V.ctx.state==='running'},
+ tick(){const c=V.ctx;if(!M.active()){if(M.nodes.length)M.cut();M.next=0;return}const per=60/Math.max(100,Math.min(120,M.rate||110));
+  if(M.next<c.currentTime+0.01)M.next=c.currentTime+0.06;while(M.next<c.currentTime+0.15){M.click(M.next);M.next+=per}
+  M.nodes=M.nodes.filter(n=>n.t>c.currentTime-0.1)},
+ click(t){const c=V.ctx;try{const o=c.createOscillator(),g=c.createGain();o.type='triangle';o.frequency.value=1250;const v=Math.max(0.02,Math.min(1,M.vol||0.3));
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(v,t+0.003);g.gain.exponentialRampToValueAtTime(0.0001,t+0.035);o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+0.04);M.nodes.push({o,t});M.clicks++}catch(e){}},
+ cut(){M.nodes.forEach(n=>{try{n.o.stop()}catch(e){}});M.nodes=[];M.next=0}};
+V.hooks=[];V.onState=sp=>{if(sp===false)V.lastText=V._lt;if(sp)M.cut();V.hooks.forEach(h=>{try{h(sp)}catch(e){}})};
 const _say=V.say;V.say=(t,k)=>{V._lt=(V._lt&&V.speaking?V._lt+' ':'')+t;_say(t,k)};
-root.Voice=V;root.Ears=S;root.isNative=isNative;root.plug=plug;
+root.Voice=V;root.Metro=M;root.Ears=S;root.isNative=isNative;root.plug=plug;
 })(this);

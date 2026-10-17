@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). Autor: Wujek Fido. */
 (function(root){
 'use strict';
-const VERSION='1.5.1';
+const VERSION='1.6';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -44,6 +44,7 @@ function parseNumber(text){const t=norm(text);{const pm=t.split(/ (?:przecinek|k
  return any?tot+(half?.5:0):null}
 // kolejność ma znaczenie: dłuższe frazy pierwsze
 const CMDS=[
+ ['ack',/^(ok|okej|okay|o k|okey|dobrze|zrobione|zrobiony|zrobiona|wykonane)$/],
  ['rko_od',/(rko|reanimacj\w*|resuscytacj\w*) (od|trwa)( od)? \S+/],
  ['decide',/czas na decyzj|podsumowani/],
  ['hyperk',/hiperkaliemi|insulin\w* z glukoz/],
@@ -181,6 +182,7 @@ const SAY={
  amioCvcOk:'Możesz podać przez wkłucie centralne.',amio50:'Wlew 50 mililitrów na dobę wymaga pompy.',
  amioCnt:'Czy w trakcie RKO lub przez ZRM podano amiodaron? Ile razy?',amioHow:'Ile razy podano amiodaron?',amioCvc:'Czy jest założone wkłucie centralne?',amioGlu:'Tylko glukoza 5%, nie sól fizjologiczna. Wlew przez 24 godziny.',
  acQ:'Czy pacjent przyjmuje leki przeciwkrzepliwe?',acDrug:'Który lek: dabigatran, rywaroksaban, apiksaban, warfaryna czy heparyna?',acDoac:'Przy lekach z grupy DOAC nie podawaj heparyny.',inrQ:'Podaj INR.',inrHigh:'INR powyżej 2,5. Nie podawaj heparyny.',inrUnknown:'Najpierw oznacz INR. Wstrzymaj heparynę.',hepLast:'Kiedy była ostatnia dawka heparyny?',hepOn:'Czy pacjent ma teraz podłączony wlew heparyny?',hepRecent:'Ostatnia dawka mniej niż 4 godziny temu. Wstrzymaj bolus, skonsultuj dawkowanie.',hepHalf:'Ostatnia dawka ponad 4 godziny temu. Podaj połowę bolusu i włącz wlew.',hepOnInf:'Pacjent na wlewie heparyny. Bez bolusu.',hepLastUnknown:'Ustal czas ostatniej dawki. Wstrzymaj heparynę.',acUnknown:'Ustal leki przed podaniem heparyny.',hepStopped:'Heparyna wstrzymana – patrz wcześniejszy komunikat.',
+ ok:'OK.',
  lucasOff:'LUCAS wstrzymany. Ocena rytmu. Jeśli POCUS, w trakcie oceny rytmu, maksymalnie 10 sekund.',gas:'Pobierz gazometrię, potas.',lucas5:'Pięć sekund.',lucas10:'Dziesięć sekund, wznów LUCAS.',lucasOn:'LUCAS pracuje.',
  logged:'Zapisano:',nothing:'Nie mam nic do powtórzenia.',
  dobuNo:'Bez dobutaminy.',bicarbAsk:'',
@@ -202,7 +204,7 @@ const MS=1000,CYCLE=120*MS,REM=10*MS,ADRI=4*60*MS,MAPI=5*60*MS;
 function Engine(opt){opt=opt||{};const E=this;E.now=opt.now||(()=>Date.now());E.out=opt.out||(()=>{});E.alarm=opt.alarm||(()=>{});E.persist=opt.persist||(()=>{});E.rand=opt.rand||Math.random;
  E.energy=opt.energy||'mindray';E.paceEl=opt.paceEl||'ap';E.paceMax=opt.paceMax||200;E.fentConc=opt.fentConc||50;E.midaConc=opt.midaConc||1;E.midaAmpMg=opt.midaAmpMg||5;E.midaAmpMl=opt.midaAmpMl||1;E.atroAmp=opt.atroAmp||0.5;E.atroDose=opt.atroDose||0.5;E.stacked=!!opt.stacked;E.hep=Object.assign({u:25000,ml:50},opt.hep||{});E.hepAmp=opt.hepAmp||5000;E.amioMode=opt.amioMode||'drip';E.dropSet=opt.dropSet===60?60:20;E.amioInf=Object.assign({mg:900,ml:50},opt.amioInf||{});E.conc=opt.conc||{};E.sayConc=opt.sayConc!==false;E.s={mode:'idle'};}
 const P=Engine.prototype;
-P.say=function(t,kind){this.s.last=t;this.out(t,kind||'say')};
+P.say=function(t,kind){if(this._ack&&kind==='ack'){if(this._ackSaid)return;this._ackSaid=true;t=SAY.ok}this.s.last=t;this.out(t,kind||'say')};
 P.log=function(type,txt,extra){const s=this.s;const e=Object.assign({t:this.now(),type,txt},extra||{});s.log.push(e);this.persist(s);return e};
 P.start=function(o){o=o||{};const now=this.now();this.s={mode:'arrest',sim:!!o.sim,t0:now,arrestT:now,cycleT:now,warned:false,rhythm:'?',shocks:0,adr:[],amio:0,lido:0,
  adrDue:null,q:[],cur:null,log:[],kg:o.kg||null,syr:o.syr||null,nora:null,dobu:null,lastMap:null,nextMap:null,ht:{},htIdx:0,cycles:0,handsOff:0,maxOff:0,
@@ -241,10 +243,12 @@ P.tick=function(){const s=this.s,now=this.now();if(s.mode==='idle'||s.mode==='en
  if(s.sedMidaT&&now>=s.sedMidaT&&!this.has('midaRep')){s.sedMidaT=null;this.ask('midaRep',midaRepText(this),{prio:1,def:'skip',tries:1})}
  if(s.bNext&&now>=s.bNext&&!this.has('bHR')&&!this.has('bSBP')&&!this.has('bSym')){s.bNext=null;this.ask('bHR',SAY.bHR,{prio:2,def:'skip',tries:2})}}
  if(s.mode==='rosc'&&s.nextMap&&now>=s.nextMap&&!this.has('sys')&&!this.has('dia')){s.nextMap=null;this.ask('sys',SAY.sys,{tries:Infinity})}};
-P.lucasOff=function(){const s=this.s,now=this.now();if(s.lucasP)return;s.lucasP=now;s.lucas5=false;s.lucas10=false;if(!s.offStart)s.offStart=now;this.log('LUCAS','LUCAS wstrzymany');
+// metronom: aktywne RKO, nie podczas oceny rytmu/pauzy, nie przy pracującym LUCAS (chyba że ustawienie)
+P.metroWanted=function(o){const s=this.s;o=o||{};if(!s||s.mode!=='arrest'||s.paused||o.on===false)return false;if(s.offStart||s.lucasP||s.aloneT)return false;if(s.lucas==='on'&&!o.lucas)return false;return true};
+P.lucasOff=function(){const s=this.s,now=this.now();if(s.lucasP)return;s.lucas='paused';s.lucasP=now;s.lucas5=false;s.lucas10=false;if(!s.offStart)s.offStart=now;this.log('LUCAS','LUCAS wstrzymany');
  let t=SAY.lucasOff;if(s.gasCyc!==s.cycles){s.gasCyc=s.cycles;t+=' '+SAY.gas}this.say(t,'alarm');if(!this.has('rhythm'))this.ask('rhythm',s.cprPace?SAY.rhythmPace:SAY.rhythm,{prio:2})};
 P.lucasEnd=function(){const s=this.s,now=this.now();if(!s.lucasP)return;const d=(now-s.lucasP)/MS;s.lucasP=null;s.lucasOffT=(s.lucasOffT||0)+d;s.lucasN=(s.lucasN||0)+1;this.log('LUCAS','Przerwa LUCAS '+Math.round(d)+' s')};
-P.lucasOn=function(){const s=this.s,now=this.now();this.lucasEnd();if(s.offStart){const off=(now-s.offStart)/MS;s.handsOff+=off;s.maxOff=Math.max(s.maxOff,off);s.offStart=null}this.log('LUCAS','LUCAS pracuje');this.say(SAY.lucasOn,'ack')};
+P.lucasOn=function(){const s=this.s,now=this.now();s.lucas='on';this.lucasEnd();if(s.offStart){const off=(now-s.offStart)/MS;s.handsOff+=off;s.maxOff=Math.max(s.maxOff,off);s.offStart=null}this.log('LUCAS','LUCAS pracuje');this.say(SAY.lucasOn,'ack')};
 P.newCycle=function(txt){const s=this.s,now=this.now();this.lucasEnd();if(s.offStart){const off=(now-s.offStart)/MS;s.handsOff+=off;s.maxOff=Math.max(s.maxOff,off);s.offStart=null}
  s.cycleT=now;s.warned=false;s.cycles++;if(txt)this.say(txt);
  // drogi oddechowe po 1. cyklu, 4H4T od 2. cyklu, po jednej przyczynie na cykl
@@ -275,14 +279,14 @@ P.setRhythm=function(shockable){const s=this.s;s.rhythm=shockable?'VF/pVT':'asys
  if(shockable){this.say(vfInstr(this.energy,s.shocks)+(s.shocks>=1&&!ENERGY_SEQ[this.energy]&&this.energy!=='max'?' '+SAY.escal:''));this.log('energia','Energia: '+energyFor(this.energy,s.shocks)+(/^\d/.test(energyFor(this.energy,s.shocks))?' J':''));if(this.stacked&&s.shocks===0&&s.scen!=='przywieziony')this.say(SAY.stacked);this.ask('shock',SAY.shock,{prio:2});
   if(!s.torsadeAsked){s.torsadeAsked=true;this.ask('torsade',SAY.torsade,{def:'no',tries:1})}}
  else{this.newCycle(SAY.nonshockI);s.adrHold=false;if(!s.adrDue||s.adrDue<=this.now())this.ask('adr',SAY.adrNow,{prio:1})}};
-P.onRhythmCmd=function(c){const s=this.s;this.drop('rhythm');this.noteInit(c);
+P.onRhythmCmd=function(c){const s=this.s;if(!['shockable','nonshock','nopulse','organised','pulse','brady'].includes(c))return false;this.drop('rhythm');this.noteInit(c);
  if(c==='shockable'){this.setRhythm(true);return true}if(c==='nonshock'||c==='nopulse'){this.setRhythm(false);return true}
  if(c==='organised'){this.log('rytm','Rytm zorganizowany – sprawdzenie tętna');this.ask('pulse',SAY.pulseQ,{prio:2});return true}
  if(c==='pulse'){this.newCycle();this.toRosc();return true}
  if(c==='brady'){this.newCycle();this.log('rytm','Bradykardia z tętnem');this.toRosc();this.startBrady();return true}return false};
 // odpowiedź na bieżące pytanie
 P.answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd:'default',def:q.def,skip:true};else return false}
- const s=this.s,c=r.cmd,yes=c==='yes'||c==='given'||c==='present'||c==='checked',no=c==='no';
+ const s=this.s,c=r.cmd,yes=c==='yes'||c==='given'||c==='present'||c==='checked'||c==='ack',no=c==='no';
  const def=c==='default';const D=def?r.def:null;
  switch(q.id){
  case 'scen':if(c==='brought'||D==='brought'){s.scen='przywieziony';this.log('scenariusz','Pacjent przywieziony w trakcie RKO');this.ask('mins',SAY.mins,{def:'skip',tries:2})}
@@ -322,7 +326,7 @@ P.answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cmd
   if(yes){this.ask('decEnd',SAY.decSay,{prio:3});return true}if(no||def){this.log('decyzja','Kierujący: kontynuacja RKO o '+hhmm(this.now()));this.say(SAY.contCPR);s.decNext=this.now()+5*60000}else return false;break;
  case 'pocusQ':{const t=norm(r.text);let v=null;if(/brak czynn|nie ma czynn|bez czynn|brak ruch|nie ma ruch/.test(t))v='brak czynności serca';else if(/nie wykonan|nie robion|bez usg|nie zrobion/.test(t)||no)v='nie wykonano';else if(yes||/jest czynn|czynnosc obecn|kurczy/.test(t))v='czynność serca obecna';else if(def)break;if(!v)return false;
   s.pocus=s.pocus||[];if(v!=='nie wykonano'){s.pocus.push({t:this.now(),v});}this.log('POCUS','Kontrola rytmu: '+v);break}
- case 'endQ':s.endAsk=false;if(c==='zakoncz_tak'||c==='yes'){this.finish();return true}this.say(SAY.endCancel);break;
+ case 'endQ':s.endAsk=false;if(c==='zakoncz_tak'){this.finish();return true}if(yes){this.say(SAY.decSay);s.endAsk=true;this.ask('endQ',SAY.endQ,{prio:3,def:'cancel',tries:2});return true}this.say(SAY.endCancel);break;
  // ---- po ROSC ----
  case 'sys':{const pr=parsePair(r.text);if(pr&&pr[0]>=30&&pr[0]<=300&&pr[1]>=10&&pr[1]<=200){s.sysV=pr[0];this.onMap(mapOf(pr[0],pr[1]),pr[0],pr[1]);break}}if(r.num!=null&&r.num>=30&&r.num<=300){s.sysV=r.num;this.ask('dia',SAY.dia,{prio:1})}else{if(def)return true;this.ask('sys',SAY.sysAgain,{prio:1});return true}break;
  case 'dia':if(r.num!=null&&r.num>=10&&r.num<=200){this.onMap(mapOf(s.sysV,r.num),s.sysV,r.num)}else{this.ask('dia',SAY.diaAgain,{prio:1});return true}break;
@@ -455,7 +459,8 @@ P.htTreat=function(i){const n=HT[i][0];if(n==='hiperkaliemia'){this.ask('calcium
  if(n==='zatorowość płucna')this.ask('lysis',SAY.lysis);if(n==='zawał')this.log('4H4T','Zawał – PCI do rozważenia');if(n==='toksyny')this.ask('ccb','Czy zatrucie blokerami kanału wapniowego?',{def:'no',tries:1});
  if(this.s.sim&&this.s.simCause===n)this.s.simTreated=true};
 // wejście z mowy/przycisku
-P.input=function(alts){const s=this.s;const r=interpret(alts);s.heard=r.text;
+P.input=function(alts){const r0=interpret(alts);this._ack=r0.cmd==='ack';this._ackSaid=false;try{return this._input(alts)}finally{this._ack=false}};
+P._input=function(alts){const s=this.s;const r=interpret(alts);s.heard=r.text;
  if(s.mode==='idle'||s.mode==='ended'){if(r.cmd==='replay')this.replay();if(r.cmd==='send')return 'send';return r.cmd}
  // komendy globalne
  switch(r.cmd){
