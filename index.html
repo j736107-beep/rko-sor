@@ -1,5 +1,5 @@
 <!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>RKO SOR</title><meta name="theme-color" content="#1b1f24"><meta name="author" content="Wujek Fido"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.png"><link rel="stylesheet" href="style.css"></head>
+<title>RKO SOR</title><meta name="theme-color" content="#1b1f24"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.png"><link rel="stylesheet" href="style.css"></head>
 <body>
 <section id="home" class="scr on">
  <header><b>RKO SOR</b><span id="net" class="net">✈ offline</span></header>
@@ -9,7 +9,7 @@
  <p class="hint">Jedno dotknięcie, potem tylko głos. Telefon połóż na parapecie, głośnik w stronę zespołu.</p>
  <div id="resume" class="card hide">Niezakończona akcja z <span id="resT"></span>. <button id="resGo">Wznów zapis</button> <button id="resEnd">Zamknij i zrób raport</button></div>
  <nav class="row"><button data-s="settings">Ustawienia</button><button data-s="reports">Raporty <span id="qn"></span></button><button data-s="help">Pomoc</button><button data-s="lic">Licencja</button><button data-s="tests">Testy</button></nav>
- <p class="foot">v<span id="ver"></span> · Wujek Fido · ERC 2025 (PRR) + AHA 2025 · narzędzie pomocnicze, decyzja należy do lekarza</p>
+ <p class="foot">v<span id="ver"></span> · ERC 2025 (PRR) + AHA 2025 · narzędzie pomocnicze, decyzja należy do lekarza</p>
 </section>
 <section id="run" class="scr">
  <div id="simbar" class="simbar hide">SYMULACJA</div>
@@ -32,11 +32,11 @@
  <div class="fb2"><button data-c="tak, zakończ" class="r">TAK, ZAKOŃCZ</button><button data-c="wyślij na moją skrzynkę">WYŚLIJ</button><button data-c="LUCAS pauza">LUCAS PAUZA</button><button data-c="LUCAS włączony">LUCAS PRACUJE</button><button data-c="potrzebny stymulator">STYMULACJA</button><button data-c="gotowe">GOTOWE</button><button data-c="bradykardia">BRADYKARDIA</button><button data-c="izoprenalina">IZOPRENALINA</button><button data-c="dopamina">DOPAMINA</button><button data-c="wlew adrenaliny">ADRENALINA WLEW</button><button data-c="zmniejsz">ZMNIEJSZ</button><button data-c="wlew heparyny">HEPARYNA WLEW</button><button data-c="wlew amiodaronu">AMIODARON WLEW</button><button data-c="nie wiem">NIE WIEM</button><button data-c="zmień rytm" id="chg" class="hide">ZMIEŃ RYTM</button></div>
 </section>
 <section id="report" class="scr">
- <div class="noprint row"><button id="back">← Start</button><button id="pdf" class="y">PDF</button><button id="copy">Kopiuj</button><button id="ai">Wyślij do AI</button><button id="wywR">Wywiad</button><button id="print">Drukuj A4</button><button id="docx">DOCX</button><button id="send">E-MAIL</button></div>
+ <div class="noprint row"><button id="back">← Start</button><button id="ai" class="kb aimain">WYŚLIJ DO AI (ChatGPT / Claude / Grok)</button><button id="pdf">PDF</button><button id="copy">Kopiuj</button><button id="wywR">Wywiad</button><button id="print">Drukuj A4</button><button id="docx">DOCX</button><button id="send">E-mail (archiwum)</button></div>
  <div id="rep"></div>
 </section>
 <section id="settings" class="scr"><div class="noprint row"><button data-s="home">← Start</button></div><h2>Ustawienia</h2>
- <label>Mój e-mail (raporty)<input id="email" type="email" placeholder="lekarz@szpital.pl"></label>
+ <label>Mój e-mail (opcjonalnie – archiwum raportów)<input id="email" type="email" placeholder="lekarz@szpital.pl"></label>
  <label>Defibrylator / energia<select id="energy"></select></label>
  <label>Strzykawka noradrenaliny<select id="syr"><option value="">pytaj przy starcie</option><option value="50">50 ml (4 mg / 50 ml)</option><option value="20">20 ml (2 mg / 20 ml) – DO WERYFIKACJI</option></select></label>
  <label>Stymulator – maks. prąd<select id="pacer"></select></label>

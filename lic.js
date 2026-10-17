@@ -1,4 +1,4 @@
-/* Licencja RKO SOR / aplikacje Wujek Fido – offline, Ed25519 (tweetnacl). Bez danych z telefonu. */
+/* Licencja RKO SOR – offline, Ed25519 (tweetnacl). Bez danych z telefonu. */
 (function(root){
 const NACL=root.nacl||(typeof require!=='undefined'?require('./nacl.min.js'):null);
 const PUBS={1:'jhRmuIUOEKVX2EC1H7MXXm56rAWpfAbQSF/x8tmQc6g=',2:'m/ejmPLXyRU+bWwQPoYh/Rp4T1ks2zRttVhCrcy1iYA='}; // 1 = główny, 2 = zapasowy (prywatny tylko w sejfie)

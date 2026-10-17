@@ -51,3 +51,4 @@ h2,h3{font-weight:600;letter-spacing:.3px}
 .strow.pass{border-left-color:var(--grn);background:var(--grnT)}.strow.pass .stat{color:var(--ok)}
 .strow.fail{border-left-color:var(--red);background:var(--redT)}.strow.fail .stat{color:var(--alarm)}.strow.skip .stat{color:var(--warn)}
 .stsum{background:var(--p1);border:1px solid var(--bd);border-left:6px solid var(--gry);padding:10px;border-radius:8px;font-size:13px}.stsum.pass{border-left-color:var(--grn)}.stsum.fail{border-left-color:var(--red)}
+.aimain{flex-basis:100%!important;font-size:18px;padding:16px}

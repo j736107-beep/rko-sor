@@ -49,7 +49,7 @@ function handle(alts,direct,conf,src){if(mic.on){mic.res(alts);return}if(!E)retu
 $('#heard').textContent='mikrofon: '+[].concat(alts)[0];const before=E.s.cur&&E.s.cur.id,beforeTxt=E.s.cur&&E.s.cur.text,k0=RKO.btnKey(E.s);const r=RKO.interpret(alts,E.ctx());const c=E.input(alts,src||(direct?'przycisk':'głos'));
  if(c==='unmatched')$('#heard').textContent='nie rozpoznano: „'+alts[0]+'” – powiedz jeszcze raz albo użyj przycisku';
  else if(beforeTxt&&RKO.btnKey(E.s)!==k0&&!(E.s.cur&&E.s.cur.text===beforeTxt))Voice.skipStale(beforeTxt);Ears.mark(c&&c!=='unmatched'?('komenda: '+c+(r.fuzzy?' (przybliżone)':'')+(before?' [pytanie: '+before+']':'')):('nie pasuje'+(before?' [pytanie: '+before+']':'')));
- if(c==='send'){if(E.s.mode==='ended')sendReport(E.s);else E.say('Raport wyślę po zakończeniu.')}
+ if(c==='send'){if(E.s.mode==='ended'){if(cfg.email)sendReport(E.s);else{showReport(E.s);openAI(E.s)}}else E.say('Raport wyślę po zakończeniu.')}
  if(E.s.mode==='ended')finished();render()}
 $$('.fb [data-c],.fb2 [data-c]').forEach(b=>b.onclick=()=>{Ears.addLog('przycisk',b.dataset.c);press(b,b.dataset.c);handle([b.dataset.c],true,null,'przycisk')});
 // v1.8: przyciski kontekstowe – do bieżącego pytania lektora; kolor aktywny do przyjęcia komendy / następnego kroku
@@ -135,7 +135,7 @@ function repBlocks(s){const r=RKO.report(s);const d=new Date(s.t0).toLocaleDateS
  B.push({text:'Leki (godzina, lek, dawka)',h:2},{table:r.drugs.length?r.drugs:[['—','brak']]});
  B.push({text:'4H i 4T (✓ potwierdzona, ✗ wykluczona, – niesprawdzona)',h:2},{table:r.ht});
  B.push({text:'Pełna oś czasu',h:2,pb:1},{table:r.timeline});
- B.push({text:'Wygenerowano: RKO SOR v'+RKO.VERSION+' (Wujek Fido), ERC 2025. Dawki µg/kg/min wyłącznie w dokumentacji; lektor podaje przepływ w ml/h.'});
+ B.push({text:'Wygenerowano: RKO SOR v'+RKO.VERSION+', ERC 2025. Dawki µg/kg/min wyłącznie w dokumentacji; lektor podaje przepływ w ml/h.'});
  B.push({text:'Podpis lekarza: ______________________   Godzina przekazania: ________'});return B}
 function showReport(s){curRep=s;const B=repBlocks(s);
  $('#rep').innerHTML=B.map(b=>b.table?tbl(b.table):b.h==1?'<h1>'+esc(b.text)+'</h1>':b.h?'<h2 class="'+(b.pb?'pb':'')+'">'+esc(b.text)+'</h2>':'<p class="'+(/SYMULACJA/.test(b.text)?'simw':'')+'">'+esc(b.text)+'</p>').join('');show('report')}
@@ -146,7 +146,7 @@ async function saveDocx(s){const F=plug('Filesystem'),bytes=docxBytes(s),name=fn
  if(F){const r=await F.writeFile({path:name,data:b64(bytes),directory:'CACHE'});return {uri:r.uri,name}}
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));a.download=name;a.click();return {name}}
 async function sendReport(s,silent){const to=cfg.email;const q=LS.get('rko_queue',[]);if(!q.includes(s.id||('R'+s.t0)))q.push(s.id||('R'+s.t0));LS.set('rko_queue',q);
- if(!to){Voice.say(RKO.SAY.noMail);updQ();return}
+ if(!to){LS.set('rko_queue',LS.get('rko_queue',[]).filter(x=>x!==(s.id||('R'+s.t0))));updQ();if(!silent){showReport(s);openAI(s)}return}
  if(!navigator.onLine){Voice.say(RKO.SAY.queued);updQ();return}
  try{const f=await saveDocx(s);const N=plug('RkoNative');const subj='Raport RKO SOR '+new Date(s.t0).toLocaleString('pl-PL')+(s.sim?' (SYMULACJA)':'');
   const body='Raport z aplikacji RKO SOR w załączniku (DOCX). Bez danych osobowych – uzupełnij w systemie szpitalnym.';
@@ -161,7 +161,8 @@ function repText(s){return repBlocks(s).map(b=>b.table?b.table.map(r=>r.join(' |
 $('#copy').onclick=()=>curRep&&copyText(repText(curRep)).then(()=>toast('Raport skopiowany'));
 $('#pdf').onclick=async()=>{if(!curRep)return;const N=NAT();if(N&&N.pdf){try{const r=await N.pdf({name:fname(curRep).replace(/\.docx$/,'.pdf')});await N.share({uri:r.uri,title:r.name,mime:'application/pdf'})}catch(e){toast('PDF: '+(e.message||e))}}else window.print()};
 $('#wywR').onclick=()=>curRep&&openWyw(curRep);
-$('#ai').onclick=()=>{if(!curRep)return;$('#aipT').value=RKO.AI_PROMPT+'\n\n'+RKO.anonymize(repText(curRep));$('#aipOk').checked=false;$('#aip').classList.remove('hide')};
+function openAI(s){if(!s)return;if(!needFull('Wysyłka do AI'))return;$('#aipT').value=RKO.AI_PROMPT+'\n\n'+RKO.anonymize(repText(s));$('#aipOk').checked=false;$('#aip').classList.remove('hide')}
+$('#ai').onclick=()=>openAI(curRep);
 $('#aipX').onclick=()=>$('#aip').classList.add('hide');
 $('#aipGo').onclick=async()=>{if(!$('#aipOk').checked){toast('Najpierw sprawdź podgląd i zaznacz potwierdzenie');return}const t=RKO.anonymize($('#aipT').value);const N=NAT();
  try{if(N&&N.shareText)await N.shareText({text:t,title:'Raport RKO – do poprawy stylu'});else if(navigator.share)await navigator.share({text:t});else{await copyText(t);toast('Skopiowano – wklej w aplikacji AI')}}catch(e){}$('#aip').classList.add('hide')};
