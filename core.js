@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). Autor: Wujek Fido. */
 (function(root){
 'use strict';
-const VERSION='1.6';
+const VERSION='1.6.1';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -244,7 +244,7 @@ P.tick=function(){const s=this.s,now=this.now();if(s.mode==='idle'||s.mode==='en
  if(s.bNext&&now>=s.bNext&&!this.has('bHR')&&!this.has('bSBP')&&!this.has('bSym')){s.bNext=null;this.ask('bHR',SAY.bHR,{prio:2,def:'skip',tries:2})}}
  if(s.mode==='rosc'&&s.nextMap&&now>=s.nextMap&&!this.has('sys')&&!this.has('dia')){s.nextMap=null;this.ask('sys',SAY.sys,{tries:Infinity})}};
 // metronom: aktywne RKO, nie podczas oceny rytmu/pauzy, nie przy pracującym LUCAS (chyba że ustawienie)
-P.metroWanted=function(o){const s=this.s;o=o||{};if(!s||s.mode!=='arrest'||s.paused||o.on===false)return false;if(s.offStart||s.lucasP||s.aloneT)return false;if(s.lucas==='on'&&!o.lucas)return false;return true};
+P.metroWanted=function(o){const s=this.s;o=o||{};if(!s||s.mode==='idle'||s.mode==='ended'||o.on===false)return 0;if(s.mode==='arrest'&&s.lucas==='on'&&o.lucas===false)return 0;if(s.mode==='arrest'&&(s.offStart||s.lucasP))return 0.5;return 1};
 P.lucasOff=function(){const s=this.s,now=this.now();if(s.lucasP)return;s.lucas='paused';s.lucasP=now;s.lucas5=false;s.lucas10=false;if(!s.offStart)s.offStart=now;this.log('LUCAS','LUCAS wstrzymany');
  let t=SAY.lucasOff;if(s.gasCyc!==s.cycles){s.gasCyc=s.cycles;t+=' '+SAY.gas}this.say(t,'alarm');if(!this.has('rhythm'))this.ask('rhythm',s.cprPace?SAY.rhythmPace:SAY.rhythm,{prio:2})};
 P.lucasEnd=function(){const s=this.s,now=this.now();if(!s.lucasP)return;const d=(now-s.lucasP)/MS;s.lucasP=null;s.lucasOffT=(s.lucasOffT||0)+d;s.lucasN=(s.lucasN||0)+1;this.log('LUCAS','Przerwa LUCAS '+Math.round(d)+' s')};

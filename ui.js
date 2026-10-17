@@ -2,7 +2,7 @@
 (function(){
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const LS={get:(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const cfg=Object.assign({email:'',energy:'mindray',syr:'',paceEl:'ap',atroAmp:'0.5',iso:'1/50',dopa:'200/50',adrinf:'1/50',sayConc:'1',pacer:'mindray',fentConc:'50',midaConc:'1',midaAmp:'5/1',atroDose:'0.5',stacked:'0',metro:'1',metroRate:'110',metroVol:'0.3',metroLucas:'0',barge:'min',amioMode:'drip',dropSet:'20',hep:'25000/50',hepAmp:'5000',amioInf:'900/50'},LS.get('rko_cfg',{}));
+const cfg=Object.assign({email:'',energy:'mindray',syr:'',paceEl:'ap',atroAmp:'0.5',iso:'1/50',dopa:'200/50',adrinf:'1/50',sayConc:'1',pacer:'mindray',fentConc:'50',midaConc:'1',midaAmp:'5/1',atroDose:'0.5',stacked:'0',metro:'1',metroRate:'110',metroVol:'0.3',metroLucas:'1',barge:'min',amioMode:'drip',dropSet:'20',hep:'25000/50',hepAmp:'5000',amioInf:'900/50'},LS.get('rko_cfg',{}));if(!cfg.m161){cfg.metroLucas='1';cfg.m161=1;try{LS.set('rko_cfg',cfg)}catch(e){}}
 let E=null,timer=null,wl=null,said=[];
 function show(id){$$('.scr').forEach(s=>s.classList.toggle('on',s.id===id));if(id==='reports')renderList();if(id==='help')renderHelp();window.scrollTo(0,0)}
 $$('[data-s]').forEach(b=>b.onclick=()=>show(b.dataset.s));
@@ -39,7 +39,7 @@ let pv='';const pg=$('.padg');['1','2','3','4','5','6','7','8','9','⌫','0','OK
 $('#numB').onclick=()=>{pv='';$('#padv').textContent='\u00a0';$('#pad').classList.remove('hide')};
 Ears.onState=st=>{$('#ears').textContent='🎤 '+st};
 function mmss(ms){ms=Math.max(0,ms);const s=Math.floor(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
-function loop(){if(!E)return;E.tick();Metro.want=!!E.metroWanted({on:cfg.metro!=='0',lucas:cfg.metroLucas==='1'});Metro.rate=+cfg.metroRate||110;Metro.vol=+String(cfg.metroVol).replace(',','.')||0.3;render()}
+function loop(){if(!E)return;E.tick();{const w=E.metroWanted({on:cfg.metro!=='0',lucas:cfg.metroLucas!=='0'});Metro.want=w>0;Metro.rate=+cfg.metroRate||110;Metro.vol=(+String(cfg.metroVol).replace(',','.')||0.3)*(w||1)}render()}
 function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')return;
  $('#modeL').textContent=s.mode==='rosc'?'PO ROSC':s.mode==='ended'?'ZAKOŃCZONO':(s.paused?'NZK – PAUZA':'NZK');
  $('#tTot').textContent=mmss((s.tEnd||now)-s.arrestT);
