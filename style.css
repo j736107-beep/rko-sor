@@ -139,3 +139,16 @@ button.act{animation:none!important}
 .ptt{width:80px;height:80px}.recog{max-height:80px}
 .undo{height:50px;min-height:50px}
 @media (orientation:portrait) and (max-height:800px){#run .big{font-size:min(18vw,76px)}.next{height:calc(3 * 1.3em + 20px);font-size:15px}.said{height:4.3em}}
+/* v1.9.9: wskaźnik mikrofonu (stały slot – przycisk mikrofonu i linia stanu o stałej wysokości) */
+.pttcol{flex:1;min-width:0;align-self:stretch;display:flex;flex-direction:column;gap:4px}
+.pttcol .recog{flex:1;max-height:none;overflow:hidden;font-size:13px;padding:4px 8px;line-height:1.25}
+.micst{flex:0 0 26px;height:26px;line-height:26px;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px;border-radius:6px;background:#2d343c;color:#b9c2cc}
+.micst.m-listen{background:#145c33;color:#d8ffe6}.micst.m-ok{background:#1d5fbf;color:#fff}.micst.m-bad,.micst.m-warn{background:#7a6200;color:#fff6cc}.micst.m-wait,.micst.m-off{background:#2d343c;color:#9aa4ae}.micst.m-err{background:#6b1f1f;color:#ffd6d6}
+.ptt.m-listen{background:#1f9d55;border-color:#7dffb0;color:#fff;animation:micBlink 1s ease-in-out infinite}
+@keyframes micBlink{0%,100%{background:#22b862;box-shadow:0 0 0 0 rgba(95,224,143,.7)}50%{background:#0e3d22;box-shadow:0 0 0 8px rgba(95,224,143,0)}}
+.ptt.m-ok{background:#1d5fbf;border-color:#9cc4ff;color:#fff;animation:none}
+.ptt.m-bad,.ptt.m-warn{background:#8a6d00;border-color:#ffd54a;color:#fff;animation:none}
+.ptt.m-wait{background:#2d343c;border-color:#59626c;color:#9aa4ae;animation:none}
+.ptt.m-off{background:#262b31;border-color:#4a525b;color:#7d8791;animation:none}
+.ptt.m-err{background:#6b1f1f;border-color:#ff6b6b;color:#fff;animation:none}
+#pttL{font-weight:800;font-size:12px;white-space:nowrap}

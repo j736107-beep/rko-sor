@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). */
 (function(root){
 'use strict';
-const VERSION='1.9.8';
+const VERSION='1.9.9';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -86,17 +86,17 @@ const CMDS=[
  ['hyperk',/hiperkaliemi|insulin\w* z glukoz/],
  ['lucas_off',/(przerw\w*|pauz\w*|zatrzymaj\w*|wstrzymaj\w*|stop)\W*(w )?lucas|lucas\W*(pauz\w*|stop|przerw\w*|wstrzyman\w*)/],['lucas_on',/lucas\W*(wlaczon\w*|wznowion\w*|pracuje|start)|(wznow\w*|wlacz\w*|uruchom\w*) lucas/],
  ['iso',/izoprenalin|isoprenalin|izuprel/],['dopa',/dopamin/],['nora',/noradrenalin/],['dobu',/dobutamin/],['hepinf',/wlew\w* heparyn|heparyn\w* (we )?wlew/],['amioinf',/wlew\w* amiodaron|amiodaron\w* (we )?wlew/],['adrinf',/wlew\w* adrenalin|\badrenalin\w* (we )?wlew/],['pace',/zalamki p bez qrs|zalamek p bez qrs|blok serca|blok przedsionkowo|blok av|potrzebny stymulator|stymulacj\w* przezskorn/],['alone',/nie moge uciskac|jestem sam|nikt nie uciska/],['zakoncz_tak',/\btak\b.*\bzakoncz/],['replay',/powtorz ostatnie|odtworz instrukcj|^powtorz\b|\bpowtorz$/],
- ['send',/wyslij/],['adr',/\badrenalin\w* podan|podan\w* adrenalin/],['amio',/amiodaron\w* podan/],['lido',/lidokain\w* podan/],
- ['nonshock',/nie do defibrylacji|brak wskazan|bez wskazan|nie defibrylowa|nie defibryluj/],['shock_done',/defibrylacj\w* wykonan|wyladowan\w*|wyladowano/], ['organised0',/migotanie przedsionkow/],['shockable',/migotanie|\bvf\b|\bwf\b|\bwu ef\b|\bfau ef\b|\bv f\b|\bp ?vt\b|\bvt\b|\bwu te\b|\bfau te\b|czestoskurcz|defibrylacyjn|defibrylacj|do defibrylacji/],
+ ['send',/wyslij/],['adr',/\badrenalin\w* (podan|podal|poszl|weszl|wstrzyk)|\b(podan\w*|podal\w*|dalem|dalam|dal|wstrzyk\w*) adrenalin/],['amio',/amiodaron\w* (podan|podal|poszl|weszl)|\b(podal\w*|dalem|dalam|dal) amiodaron/],['lido',/lidokain\w* (podan|podal|poszl)|\b(podal\w*|dalem|dalam|dal) lidokain/],
+ ['nonshock',/nie do defibrylacji|brak wskazan|bez wskazan|nie defibrylowa|nie defibryluj/],['shock_done',/defibrylacj\w* wykonan|wyladowan\w*|wyladowano|\bstrzal\w*|strzelil\w*|strzelon\w*/], ['organised0',/migotanie przedsionkow/],['shockable',/migotanie|\bvf\b|\bwf\b|\bwu ef\b|\bfau ef\b|\bv f\b|\bp ?vt\b|\bvt\b|\bwu te\b|\bfau te\b|czestoskurcz|defibrylacyjn|defibrylacj|do defibrylacji/],
  ['nopulse',/brak tetna|nie ma tetna|bez tetna|brak tetno|bez tetno/],
- ['pulse',/jest tetno|wyczuwalne tetno|tetno jest|mam tetno|^tetno$|^tetno (wyczuwalne|obecne)/],['brady',/bradykardi/],
+ ['pulse',/jest tetno|wyczuwalne tetno|tetno jest|mam tetno|mamy tetno|wyczuwam tetno|tetno wyczuwam|jest tetna|tetno obecne|^tetno$|^tetno (wyczuwalne|obecne)/],['brady',/bradykardi/],
  ['nonshock',/brak wskazan|nie do defibrylacji|asystol|asystori|\bpea\b|\bp e a\b|\bpe a\b|\bpe e a\b|\bpi i ej\b|rozkojarzeni|aktywnosc elektryczna/],
  ['organised',/rytm zatokowy|zatokowy|rytm zorganizowany|zorganizowany|wezlowy/],['intub',/intubacj|zaintubowan/],['usg',/\busg\b|u s g|pocus|ultrasonograf/],
  ['rosc',/\brosc\b|ros[ck]|powrot krazenia/],['arrest',/zatrzymanie/],['up',/zwieksz/],['keep',/utrzymaj/],['pause',/pauza|^stop\b|\bstop$/],['down',/zmniejsz/],['end',/zakoncz/],
  ['given',/podano|podane|podany|podana|podalem|podalam/],['bicarb',/wodoroweglan/],['change',/zmien rytm/],
  ['present',/^jest\b|jestem/],['checked',/sprawdzon|wykluczon/],['next',/dalej|nastepn|pomin/],['unknown',/nie wiem/],['kg',/kilogram|\bwaga\b|\bmasa\b/],
  ['s20',/dwadziescia|\b20\b/],['s50',/piecdziesiat|\b50\b/],
- ['yes',/^tak\b|\btak$|^tag$|^dak$|^tak tak/],['no',/^nie\b|\bnie$/]];
+ ['yes',/^tak\b|\btak$|^tag$|^dak$|^tak tak|^potwierdzam|^zgadza sie|^jasne$|^dobra$/],['no',/^nie\b|\bnie$|^negatywn/]];
 function parsePair(text){const t=norm(text).replace(/\//g,' na ');const p=t.split(/ na /);if(p.length!==2)return null;const a=parseNumber(p[0]),b=parseNumber(p[1]);return a!=null&&b!=null?[a,b]:null}
 const CRIT=['rko_od','lucas_off','lucas_on','pause','arrest','shock_done','replay'];
 const BARGE_MIN=['stop','wyladowano','wyladowanie','wyladowane'];
