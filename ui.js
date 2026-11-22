@@ -23,8 +23,16 @@ for(const k in RKO.ENERGY_LABEL){const o=document.createElement('option');o.valu
 $('#email').value=cfg.email;$('#energy').value=cfg.energy;$('#syr').value=cfg.syr;
 $('#paceEl').value=cfg.paceEl;for(const k in RKO.PACEMAX){const o=document.createElement('option');o.value=k;o.textContent=RKO.PACEMAX[k].label;$('#pacer').appendChild(o)}
 const KS=['atroAmp','iso','dopa','adrinf','sayConc','pacer','fentConc','midaConc','midaAmp','atroDose','stacked','hep','hepAmp','amioMode','dropSet','barge','metro','metroRate','metroVol','metroLucas'];KS.forEach(k=>$('#'+k).value=cfg[k]);['email','energy','syr','paceEl'].concat(KS).forEach(k=>$('#'+k).onchange=()=>{cfg[k]=$('#'+k).value.trim();LS.set('rko_cfg',cfg)});
-function net(){$('#net').textContent=navigator.onLine?'☁ sieć dostępna':'✈ offline';if(navigator.onLine)flushQueue(true)}
-addEventListener('online',net);addEventListener('offline',net);net();
+// v1.9.7 (B6): Android WebView nie aktualizuje navigator.onLine w trybie samolotowym – sprawdzamy połączenie naprawdę (zapytanie bez treści, limit 4 s)
+let netOk=null,netP=null;const NET_URL='https://www.gstatic.com/generate_204';
+function netShow(ok){const was=netOk;netOk=ok;$('#net').textContent=ok?'☁ sieć dostępna':'✈ offline';$('#net').classList.toggle('off',!ok);if(ok&&was===false){const q=LS.get('rko_queue',[]);updQ();if(q.length&&cfg.email&&!active())toast('Sieć wróciła – raporty w kolejce: '+q.length+'. Raporty → „Wyślij kolejkę teraz”.')}}
+function probe(){if(netP)return netP;netP=(async()=>{if(navigator.onLine===false){netShow(false);return false}const c=window.AbortController?new AbortController():null;const t=setTimeout(()=>c&&c.abort(),4000);
+ try{await fetch(NET_URL+'?t='+Date.now(),{mode:'no-cors',cache:'no-store',signal:c?c.signal:undefined});netShow(true);return true}catch(e){netShow(false);return false}finally{clearTimeout(t);netP=null}})();return netP}
+function net(){probe()}
+addEventListener('online',net);addEventListener('offline',net);document.addEventListener('visibilitychange',()=>{if(!document.hidden)probe()});$('#net').textContent='… sprawdzam sieć';probe();setInterval(()=>{if(!document.hidden)probe()},45000);
+// v1.9.7 (B1): blokada przypadkowego podwójnego dotknięcia – w ciągu 500 ms od poprzedniego dotknięcia przycisku akcji kolejne jest ignorowane
+const TAPLOCK=500;let lastTap=0;$('#run').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.id==='ptt')return;const now=Date.now();if(now-lastTap<TAPLOCK){e.stopImmediatePropagation();e.preventDefault();return}lastTap=now},true);
+window.__tapLock=()=>({TAPLOCK,lastTap});
 // ---- start ----
 async function wake(on){const K=plug('KeepAwake');try{if(K){on?await K.keepAwake():await K.allowSleep();return}
  if(on&&navigator.wakeLock)wl=await navigator.wakeLock.request('screen');if(!on&&wl){wl.release();wl=null}}catch(e){}}
@@ -49,7 +57,7 @@ function handle(alts,direct,conf,src){if(mic.on){mic.res(alts);return}if(!E)retu
 $('#heard').textContent='mikrofon: '+[].concat(alts)[0];const before=E.s.cur&&E.s.cur.id,beforeTxt=E.s.cur&&E.s.cur.text,k0=RKO.btnKey(E.s);const r=RKO.interpret(alts,E.ctx());const c=E.input(alts,src||(direct?'przycisk':'głos'));
  if(c==='unmatched')$('#heard').textContent='nie rozpoznano: „'+alts[0]+'” – powiedz jeszcze raz albo użyj przycisku';
  else if(beforeTxt&&RKO.btnKey(E.s)!==k0&&!(E.s.cur&&E.s.cur.text===beforeTxt))Voice.skipStale(beforeTxt);Ears.mark(c&&c!=='unmatched'?('komenda: '+c+(r.fuzzy?' (przybliżone)':'')+(before?' [pytanie: '+before+']':'')):('nie pasuje'+(before?' [pytanie: '+before+']':'')));
- if(c==='send'){if(E.s.mode==='ended'){if(cfg.email)sendReport(E.s);else{showReport(E.s);aiOneTap(E.s)}}else E.say('Raport wyślę po zakończeniu.')}
+ if(c==='send'){if(E.s.mode==='ended'){if(cfg.email)sendReport(E.s);else{showReport(E.s);askEmail(E.s)}}else E.say('Raport wyślę po zakończeniu.')}
  if(E.s.mode==='ended')finished();render()}
 $$('.fb [data-c],.fb2 [data-c]').forEach(b=>b.onclick=()=>{Ears.addLog('przycisk',b.dataset.c);press(b,b.dataset.c);handle([b.dataset.c],true,null,'przycisk')});
 // v1.8: przyciski kontekstowe – do bieżącego pytania lektora; kolor aktywny do przyjęcia komendy / następnego kroku
@@ -65,7 +73,11 @@ let rhyKey=null;function renderRhy(act){const box=$('#rhyb');if(!box||!E)return;
  L.forEach(x=>{const b=document.createElement('button');b.textContent=x.label;b.dataset.c=x.c;if(x.cls)b.classList.add('k'+x.cls);b.onclick=()=>{press(b,x.c);Ears.addLog('przycisk',x.c);setTimeout(()=>{handle([x.c],true,null,'przycisk');renderCtx()},120)};box.appendChild(b)})}
  box.querySelectorAll('button').forEach(b=>b.classList.toggle('act',act!=null&&b.dataset.c===act))}
 // v1.9: COFNIJ przez 5 s po każdym potwierdzeniu
-function renderUndo(){const u=$('#undo');if(!E||!E.canUndo){u.classList.add('hide');return}const ok=E.canUndo();u.classList.toggle('hide',!ok);if(ok){const l=Math.max(0,5-Math.floor((Date.now()-E.undoSnap.t)/1000));$('#undoB').textContent='COFNIJ ('+l+')';$('#undoT').textContent=E.undoSnap.label.slice(0,60)}}
+// v1.9.7 (B1): pasek COFNIJ ma stałe, zarezerwowane miejsce nad przyciskami (nie przesuwa ich, nie pojawia się w miejscu naciśniętego przycisku); aktywny dopiero 600 ms po pojawieniu się
+let undoShownT=0,undoSnapT=null;const UNDO_ARM=600;
+function renderUndo(){const u=$('#undo');const ok=!!(E&&E.canUndo&&E.canUndo());if(!ok){u.classList.remove('on','arm');u.setAttribute('aria-hidden','true');undoSnapT=null;return}
+ if(undoSnapT!==E.undoSnap.t){undoSnapT=E.undoSnap.t;undoShownT=Date.now()}const armed=Date.now()-undoShownT>=UNDO_ARM;u.classList.add('on');u.classList.toggle('arm',!armed);u.setAttribute('aria-hidden','false');
+ const l=Math.max(0,5-Math.floor((Date.now()-E.undoSnap.t)/1000));$('#undoB').textContent='COFNIJ ('+l+')';$('#undoT').textContent=E.undoSnap.label.slice(0,60)}
 // v1.9.6: przycisk mikrofonu – metronom i lektor stop, świeży rozpoznawacz, wynik pośredni, transkrypcja na żywo
 const PTT={get on(){return Ears.pttOn}};function pttSet(on){const b=$('#ptt');if(!b)return;b.classList.toggle('on',on);$('#pttL').textContent=on?'SŁUCHAM…':'MÓW'}
 function pttUi(t,cls){const r=$('#recog');if(!r)return;r.textContent=t;r.className='recog'+(cls?' '+cls:'')}
@@ -75,11 +87,11 @@ function pttPress(onCmd){if(Ears.pttOn){Ears.pttEnd(null,'anulowano');return}Voi
 $('#ptt').onclick=()=>{if(!E)return;pttPress((m,alts)=>{if(m){handle([m.say],true,null,'ptt');showRec()}else handle(alts,true,null,'ptt')})};
 window.__pttPress=pttPress;
 function showRec(){if(E&&E.lastRec&&Date.now()-E.lastRec.t<6000){const r=$('#recog');r.textContent=r.textContent+' · '+E.lastRec.text+' — COFNIJ przez 5 s, jeśli źle';r.classList.add('ok')}}
-$('#undoB').onclick=()=>{if(!E)return;Voice.stop();Ears.addLog('przycisk','COFNIJ');if(E.undo())toast('Cofnięto');render()};
+$('#undoB').onclick=()=>{if(!E||!$('#undo').classList.contains('on')||Date.now()-undoShownT<UNDO_ARM)return;Voice.stop();Ears.addLog('przycisk','COFNIJ');if(E.undo())toast('Cofnięto');render()};
 // v1.9: wywiad (tekst, dyktowanie klawiaturą)
 let wywTarget=null;function openWyw(target){wywTarget=target;$('#wywT').value=target.wywiad||'';$('#wyw').classList.remove('hide');setTimeout(()=>$('#wywT').focus(),100)}
 $('#wywB').onclick=()=>{if(!E||!needFull('Wywiad'))return;openWyw(E.s)};
-$('#wywS').onclick=()=>{if(wywTarget){wywTarget.wywiad=$('#wywT').value.trim();if(E&&wywTarget===E.s){LS.set('rko_cur',E.s.mode==='ended'?null:E.s)}saveRep(wywTarget);if(curRep===wywTarget)showReport(curRep)}$('#wyw').classList.add('hide')};
+$('#wywS').onclick=()=>{if(wywTarget){const raw=$('#wywT').value.trim(),clean=RKO.anonymize(raw,{free:true});wywTarget.wywiad=clean;if(clean!==raw)toast('Usunięto dane osobowe z wywiadu (PESEL, telefony, daty, adresy, nazwiska) – sprawdź raport');if(E&&wywTarget===E.s){LS.set('rko_cur',E.s.mode==='ended'?null:E.s)}saveRep(wywTarget);if(curRep===wywTarget)showReport(curRep)}$('#wyw').classList.add('hide')};
 $('#wywX').onclick=()=>$('#wyw').classList.add('hide');
 function saveRep(s){if(!s||s.mode!=='ended')return;const list=LS.get('rko_reports',[]);const i=list.findIndex(r=>r.id===s.id);if(i>=0){list[i]=s;LS.set('rko_reports',list)}}
 // v1.9: wyjście w trakcie akcji
@@ -115,7 +127,7 @@ function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')ret
  $('#modeL').textContent=s.mode==='rosc'?'PO ROSC':s.mode==='ended'?'ZAKOŃCZONO':(s.paused?'NZK – PAUZA':'NZK');
  $('#tTot').textContent=mmss((s.tEnd||now)-s.arrestT);
  const left=120000-(now-s.cycleT);const chk=s.mode==='arrest'&&(left<15000||(s.cur&&['rhythm','rhyAsy','pulse'].includes(s.cur.id)));$('#tCyc').textContent=s.mode==='arrest'?mmss(left).slice(1):'—';$('#tCyc').classList.toggle('cy',chk);$('#tCyc').classList.toggle('cg',s.mode==='arrest'&&!chk);$('#tCycL').textContent=s.mode!=='arrest'?'—':chk?'OCENA RYTMU – przygotuj się':'uciskanie – do oceny rytmu';
- $('#rhy').textContent=s.mode==='rosc'?'ROSC':s.rhythm;$('#shk').textContent=s.shocks;
+ {const rt=s.mode==='rosc'?'ROSC':s.rhythm;const el=$('#rhy');if(el.textContent!==rt.replace('/','/\u200b')){el.textContent=rt.replace('/','/\u200b')}el.classList.toggle('long',rt.length>6)}$('#shk').textContent=s.shocks;
  let nx='—',due=false;
  if(s.mode==='arrest'){if(s.adrDue){const l=s.adrDue-now;due=l<=0;nx='Adrenalina 1 mg '+(due?'TERAZ':'za '+mmss(l))}else nx='Adrenalina: przy rytmie niedefibrylacyjnym od razu, VF po 3. wyładowaniu'}
  if(s.mode==='rosc'){nx=s.nora?'Noradrenalina '+RKO.fmt1(s.nora.mlh)+' ml/h':'Pętla ciśnienia';if(s.dobu)nx+=' · dobutamina '+RKO.fmt1(s.dobu.mlh)+' ml/h';if(s.lastMap!=null)nx+=' · MAP '+s.lastMap;if(s.nextMap)nx+=' · pomiar za '+mmss(s.nextMap-now)}
@@ -139,11 +151,11 @@ function repBlocks(s){const r=RKO.report(s);const d=new Date(s.t0).toLocaleDateS
  B.push({text:'RKO SOR – raport przekazania (OIT) – '+d,h:1});if(s.sim)B.push({text:'SYMULACJA – NIE DO DOKUMENTACJI PACJENTA',b:true});
  if(s.summary){B.push({text:'Podsumowanie symulacji',h:2},{table:[...s.summary.good.map(x=>['✅ dobrze',x]),...s.summary.late.map(x=>['⏱ spóźnione',x]),...s.summary.miss.map(x=>['❌ pominięte',x]),['Czas bez ucisku',s.summary.handsOff+' s'],['Wyładowania',String(s.summary.shocks)]]})}
  B.push({text:'Pacjent: ____________________  PESEL: ______________ (uzupełnić w systemie szpitalnym)'});
- B.push({text:'Najważniejsze (30 s)',h:2},{table:r.sum});if(s.wywiad)B.push({text:'Wywiad',h:2},{text:s.wywiad});
+ B.push({text:'Najważniejsze (30 s)',h:2},{table:r.sum});if(s.wywiad)B.push({text:'Wywiad',h:2},{text:RKO.anonymize(s.wywiad,{free:true})});
  if(r.missing.length)B.push({text:'Brakujące dane: '+r.missing.join(', ')});
  B.push({text:'Leki (godzina, lek, dawka)',h:2},{table:r.drugs.length?r.drugs:[['—','brak']]});
  B.push({text:'4H i 4T (✓ potwierdzona, ✗ wykluczona, – niesprawdzona)',h:2},{table:r.ht});
- B.push({text:'Pełna oś czasu',h:2,pb:1},{table:r.timeline});
+ B.push({text:'Pełna oś czasu',h:2,pb:1},{table:r.timeline.map(row=>[row[0],row[1],RKO.anonymize(row[2])])});
  B.push({text:'Wygenerowano: RKO SOR v'+RKO.VERSION+', ERC 2025. Dawki µg/kg/min wyłącznie w dokumentacji; lektor podaje przepływ w ml/h.'});
  B.push({text:'Podpis lekarza: ______________________   Godzina przekazania: ________'});return B}
 function showReport(s){curRep=s;const B=repBlocks(s);
@@ -154,13 +166,19 @@ function b64(u8){let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCo
 async function saveDocx(s){const F=plug('Filesystem'),bytes=docxBytes(s),name=fname(s);
  if(F){const r=await F.writeFile({path:name,data:b64(bytes),directory:'CACHE'});return {uri:r.uri,name}}
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));a.download=name;a.click();return {name}}
-async function sendReport(s,silent){const to=cfg.email;const q=LS.get('rko_queue',[]);if(!q.includes(s.id||('R'+s.t0)))q.push(s.id||('R'+s.t0));LS.set('rko_queue',q);
- if(!to){LS.set('rko_queue',LS.get('rko_queue',[]).filter(x=>x!==(s.id||('R'+s.t0))));updQ();if(!silent){showReport(s);openAI(s)}return}
- if(!navigator.onLine){Voice.say(RKO.SAY.queued);updQ();return}
+async function sendReport(s,silent){const to=cfg.email;
+ // v1.9.7 (B10): bez adresu – prośba o adres (nie podgląd AI)
+ if(!to){if(!silent){if(curRep!==s)showReport(s);askEmail(s)}return}
+ const q=LS.get('rko_queue',[]);if(!q.includes(s.id||('R'+s.t0)))q.push(s.id||('R'+s.t0));LS.set('rko_queue',q);updQ();
+ // v1.9.7 (B6): prawdziwe sprawdzenie sieci; bez sieci raport czeka w kolejce
+ if(!(await probe())){Voice.say(RKO.SAY.queued);toast('Brak sieci – raport w kolejce ('+LS.get('rko_queue',[]).length+'). Wyślij później: Raporty → „Wyślij kolejkę teraz”.');updQ();return}
  try{const f=await saveDocx(s);const N=plug('RkoNative');const subj='Raport RKO SOR '+new Date(s.t0).toLocaleString('pl-PL')+(s.sim?' (SYMULACJA)':'');
   const body='Raport z aplikacji RKO SOR w załączniku (DOCX). Bez danych osobowych – uzupełnij w systemie szpitalnym.';
   if(N)await N.sendEmail({to,subject:subj,body,uri:f.uri});else location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body+' Plik '+f.name+' został pobrany – dołącz go.');
   LS.set('rko_queue',LS.get('rko_queue',[]).filter(x=>x!==(s.id||('R'+s.t0))));if(!silent)Voice.say(RKO.SAY.sent)}catch(e){Voice.say(RKO.SAY.queued)}updQ()}
+let emqRep=null;function askEmail(s){emqRep=s;$('#emqI').value=cfg.email||'';$('#emqE').textContent='';$('#emq').classList.remove('hide');setTimeout(()=>$('#emqI').focus(),100)}
+$('#emqX').onclick=()=>{$('#emq').classList.add('hide');emqRep=null};
+$('#emqGo').onclick=()=>{const v=$('#emqI').value.trim();if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)){$('#emqE').textContent='Wpisz poprawny adres e-mail.';return}cfg.email=v;LS.set('rko_cfg',cfg);$('#email').value=v;$('#emq').classList.add('hide');const s=emqRep;emqRep=null;if(s)sendReport(s)};
 function flushQueue(auto){const q=LS.get('rko_queue',[]);if(!q.length||!cfg.email||(E&&E.s.mode!=='ended'&&E.s.mode!=='idle'))return;const rep=LS.get('rko_reports',[]).find(r=>r.id===q[0]);
  if(rep&&!auto)sendReport(rep,true);updQ()}
 function updQ(){const n=LS.get('rko_queue',[]).length;$('#qn').textContent=n?'('+n+' w kolejce)':''}updQ();
@@ -209,9 +227,17 @@ $('#selftest').onclick=async()=>{const o=[];Voice.unlock();o.push('Nagrania lekt
  const SR=plug('SpeechRecognition');if(SR){try{const a=await SR.available();o.push('Rozpoznawanie mowy: '+(a.available?'dostępne':'BRAK'));const p=await SR.requestPermissions();o.push('Mikrofon: '+p.speechRecognition)}catch(e){o.push('Mikrofon: błąd '+e.message)}}
  else o.push('Rozpoznawanie mowy (przeglądarka): '+((window.SpeechRecognition||window.webkitSpeechRecognition)?'dostępne (Chrome wymaga sieci)':'brak – tylko przyciski'));
  $('#stres').textContent=o.join('\n')};
-function renderHelp(){$('#helpc').innerHTML=`<h2>Najważniejsze (v1.9)</h2><p class="small">Przyciski są główne. Mikrofon słucha tylko ok. 8 s po pytaniu lektora. Głosem odpowiadasz tylko „TAK” albo „NIE”. Ocena rytmu: „Czy migotanie komór albo częstoskurcz bez tętna?” → „Czy asystolia?” → „Czy jest tętno?” (NIE = PEA, TAK = ROSC; brak odpowiedzi 10 s = brak tętna). Po ROSC: „Czy rytm zatokowy?” → „Czy migotanie przedsionków?” → inny nadkomorowy. Skróty VF / pVT / ASYSTOLIA / PEA / TĘTNO są zawsze na ekranie. Po każdym potwierdzeniu przez 5 s widać COFNIJ. Zegar cyklu: zielony = uciskanie, żółty = ocena rytmu za ≤15 s. Przerwa w uciskaniu &gt;10 s = ostrzeżenie.</p><h2>Inne komendy głosowe</h2><p class="small">„migotanie komór” / „częstoskurcz bez tętna” / „asystolia” / „PEA” / „tętno” · „RKO od 20 minut” (pacjent przywieziony) · „wyładowano” · „nie mogę uciskać” · „intubacja” · „USG” · „zatrzymanie” · „zwiększ”/„utrzymaj” · liczby („120 na 80”) · „pauza”/„dalej” · „wlew heparyny”, „wlew amiodaronu”, „wlew adrenaliny” (wersja pełna) · „powtórz” · „zakończ” → „tak, zakończ”.</p><h2>Raport</h2><p class="small">Po akcji: PDF (jedno dotknięcie), Kopiuj, Wywiad, „Wyślij do AI” (podgląd obowiązkowy, dane osobowe usuwane automatycznie – sprawdź).</p>
+function renderHelp(){$('#helpc').innerHTML=`<h2>Co nowego w wersji 1.9.7</h2><ul class="small">
+<li>COFNIJ ma stałe miejsce nad przyciskami – przyciski już się nie przesuwają. COFNIJ działa 0,6 s po pojawieniu się, a przypadkowe podwójne dotknięcie (do 0,5 s) jest ignorowane.</li>
+<li>Po zamknięciu aplikacji po ROSC wracają pomiary: ciśnienie (pętla MAP), SpO₂, EKG, temperatura, glikemia i GCS.</li>
+<li>Dane osobowe (PESEL także ze spacjami i myślnikami, telefony, e-maile, daty, adresy, imiona i nazwiska) są usuwane z wywiadu przy zapisie oraz z raportu, PDF, DOCX, e-maila i tekstu dla AI.</li>
+<li>Działa przycisk „Kopiuj raport (tekst)”.</li>
+<li>Wskaźnik sieci naprawdę sprawdza połączenie (tryb samolotowy = „offline”); bez sieci e-mail trafia do kolejki. E-mail bez ustawionego adresu prosi o adres.</li>
+<li>ERC 2025: po 3 wyładowaniach podpowiedź zmiany położenia elektrod na przednio-tylne; seria 3 wyładowań seryjnych liczona jako 1. wyładowanie przy lekach; przy bloku z szerokim QRS i po przeszczepie serca „nie podawaj atropiny” (stymulacja, izoprenalina lub adrenalina; po przeszczepie aminofilina 100–200 mg i.v. powoli); glukagon 3–10 mg i.v. przy podejrzeniu β-blokera lub blokera kanału wapniowego; po ROSC cele: normokapnia PaCO₂ 35–45 mmHg i zapobieganie gorączce (≤37,5 °C przez 72 h u nieprzytomnego).</li>
+<li>Drobne: pełna nazwa rytmu „asystolia/PEA”, spójny czas RKO w raporcie (min i s), poprawione podsumowanie symulacji, układ poziomy z przyciskami po prawej.</li></ul>
+<h2>Najważniejsze (v1.9)</h2><p class="small">Przyciski są główne. Mikrofon słucha tylko ok. 8 s po pytaniu lektora. Głosem odpowiadasz tylko „TAK” albo „NIE”. Ocena rytmu: „Czy migotanie komór albo częstoskurcz bez tętna?” → „Czy asystolia?” → „Czy jest tętno?” (NIE = PEA, TAK = ROSC; brak odpowiedzi 10 s = brak tętna). Po ROSC: „Czy rytm zatokowy?” → „Czy migotanie przedsionków?” → inny nadkomorowy. Skróty VF / pVT / ASYSTOLIA / PEA / TĘTNO są zawsze na ekranie. Po każdym potwierdzeniu przez 5 s widać COFNIJ (stałe miejsce nad przyciskami, aktywny po 0,6 s). Zegar cyklu: zielony = uciskanie, żółty = ocena rytmu za ≤15 s. Przerwa w uciskaniu &gt;10 s = ostrzeżenie.</p><h2>Inne komendy głosowe</h2><p class="small">„migotanie komór” / „częstoskurcz bez tętna” / „asystolia” / „PEA” / „tętno” · „RKO od 20 minut” (pacjent przywieziony) · „wyładowano” · „nie mogę uciskać” · „intubacja” · „USG” · „zatrzymanie” · „zwiększ”/„utrzymaj” · liczby („120 na 80”) · „pauza”/„dalej” · „wlew heparyny”, „wlew amiodaronu”, „wlew adrenaliny” (wersja pełna) · „powtórz” · „zakończ” → „tak, zakończ”.</p><h2>Raport</h2><p class="small">Po akcji: PDF (jedno dotknięcie), DOCX, „Kopiuj raport (tekst)”, Wywiad, „Wyślij do AI” (podgląd obowiązkowy). Dane osobowe są usuwane automatycznie z wywiadu, raportu, PDF, DOCX, e-maila i tekstu dla AI – mimo to sprawdź podgląd.</p>
 <h2>Wysyłka raportu – instrukcja dla lekarza</h2><ol class="small"><li>Ustawienia → „Mój e-mail” → wpisz swój adres (raz).</li><li>Po zakończeniu: przycisk „WYŚLIJ” albo komenda „wyślij na moją skrzynkę”.</li><li>Otworzy się program poczty z adresem i załącznikiem DOCX – zatwierdź „Wyślij”.</li><li>Bez sieci raport czeka w kolejce (Raporty → „Wyślij kolejkę teraz”).</li><li>Na komputerze: otwórz pocztę lub chmurę tego samego konta i pobierz plik.</li></ol>
-<p class="small">Raport nie zawiera nazwiska ani PESEL. Zgodność z RODO – DO WERYFIKACJI z IOD.</p>`}
+<p class="small">Raport nie zawiera nazwiska ani PESEL – aplikacja usuwa je także z wywiadu. Zgodność z RODO – DO WERYFIKACJI z IOD.</p>`}
 if('serviceWorker' in navigator&&!window.isNative&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 Voice.init();
 window.__rko={get E(){return E},handle,show,showReport,docxBytes,wake,nat,repBlocks,toast,copyText,get LICS(){return LICS},instId,isFull,updCheck,newer,active,mic};

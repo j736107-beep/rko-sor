@@ -12,16 +12,19 @@
  <p class="foot">v<span id="ver"></span> · ERC 2025 (PRR) + AHA 2025 · narzędzie pomocnicze, decyzja należy do lekarza</p>
 </section>
 <section id="run" class="scr">
+ <div class="runL">
  <div id="simbar" class="simbar hide">SYMULACJA</div>
  <div class="top"><span id="modeL">NZK</span><button id="wywB" class="wywb">WYWIAD</button><span id="ears" class="ears">🎤 …</span></div>
  <div class="big cg" id="tCyc">2:00</div><div class="lbl" id="tCycL">uciskanie – do oceny rytmu</div>
  <div class="grid3"><div><div class="mid" id="tTot">00:00</div><div class="lbl">czas RKO</div></div><div><div class="mid" id="rhy">?</div><div class="lbl">rytm</div></div><div><div class="mid" id="shk">0</div><div class="lbl">wyładowania</div></div></div>
  <div class="next" id="next">—</div>
  <div class="pttrow"><button id="ptt" class="ptt" aria-label="Mikrofon – powiedz komendę"><svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg><span id="pttL">MÓW</span></button><div id="recog" class="recog">Naciśnij mikrofon i powiedz: migotanie komór, asystolia, PEA, tętno…</div></div>
- <div id="undo" class="undo hide"><button id="undoB">COFNIJ</button><span id="undoT"></span></div>
+ <div class="said" id="said"></div><div class="heard" id="heard">mikrofon: —</div><div class="rawlog" id="rawlog"></div>
+ </div>
+ <div class="runR">
+ <div id="undo" class="undo" aria-hidden="true"><button id="undoB" tabindex="-1">COFNIJ</button><span id="undoT"></span></div>
  <div id="ctxb" class="ctxb"></div>
  <div id="rhyb" class="rhyb"></div>
- <div class="said" id="said"></div><div class="heard" id="heard">mikrofon: —</div><div class="rawlog" id="rawlog"></div>
  <div class="fb">
   <button data-c="tak" class="y">TAK</button><button data-c="nie" class="n">NIE</button>
   <button data-c="defibrylacja wykonana" class="r">WYŁADOWANO</button>
@@ -31,9 +34,10 @@
   <button data-c="pauza">PAUZA</button><button data-c="dalej">DALEJ</button><button data-c="zakończ" class="n">ZAKOŃCZ</button>
  </div>
  <div class="fb2"><button data-c="tak, zakończ" class="r">TAK, ZAKOŃCZ</button><button data-c="wyślij na moją skrzynkę">WYŚLIJ</button><button data-c="LUCAS pauza">LUCAS PAUZA</button><button data-c="LUCAS włączony">LUCAS PRACUJE</button><button data-c="potrzebny stymulator">STYMULACJA</button><button data-c="gotowe">GOTOWE</button><button data-c="bradykardia">BRADYKARDIA</button><button data-c="izoprenalina">IZOPRENALINA</button><button data-c="dopamina">DOPAMINA</button><button data-c="wlew adrenaliny">ADRENALINA WLEW</button><button data-c="zmniejsz">ZMNIEJSZ</button><button data-c="wlew heparyny">HEPARYNA WLEW</button><button data-c="wlew amiodaronu">AMIODARON WLEW</button><button data-c="nie wiem">NIE WIEM</button><button data-c="zmień rytm" id="chg" class="hide">ZMIEŃ RYTM</button></div>
+ </div>
 </section>
 <section id="report" class="scr">
- <div class="noprint repb"><button id="ai" class="kb aimain">WYŚLIJ DO AI (ChatGPT / Claude / Grok)</button><button id="aiPrev" class="tb">Podgląd tekstu dla AI</button><button id="pdf" class="tr">PDF</button><button id="docx" class="tg">DOCX</button><button id="print" class="ta">Drukuj A4</button><button id="wywR" class="tb">Wywiad</button><button id="send" class="tn">E-mail (archiwum)</button><button id="back" class="tn">← Start</button><button id="copy" class="hide">Kopiuj</button></div>
+ <div class="noprint repb"><button id="ai" class="kb aimain">WYŚLIJ DO AI (ChatGPT / Claude / Grok)</button><button id="aiPrev" class="tb">Podgląd tekstu dla AI</button><button id="pdf" class="tr">PDF</button><button id="docx" class="tg">DOCX</button><button id="copy" class="tb">Kopiuj raport (tekst)</button><button id="print" class="ta">Drukuj A4</button><button id="wywR" class="tb">Wywiad</button><button id="send" class="tn">E-mail (archiwum)</button><button id="back" class="tn">← Start</button></div>
  <div id="rep"></div>
 </section>
 <section id="settings" class="scr"><div class="noprint row"><button data-s="home">← Start</button></div><h2>Ustawienia</h2>
@@ -70,9 +74,10 @@
  <div id="stList"></div><h3>Podsumowanie</h3><pre id="stSum" class="stsum"></pre></section>
 <section id="reports" class="scr"><div class="noprint row"><button data-s="home">← Start</button></div><h2>Raporty</h2><div id="rlist"></div></section>
 <section id="help" class="scr"><div class="noprint row"><button data-s="home">← Start</button></div><div id="helpc"></div></section>
-<div id="wyw" class="modal hide"><div class="mbox"><h2>Wywiad</h2><p class="small">Dyktuj klawiaturą (ikona mikrofonu na klawiaturze). Nie wpisuj nazwiska ani PESEL.</p><textarea id="wywT" rows="9"></textarea><div class="row"><button id="wywS" class="y">Zapisz</button><button id="wywX">Zamknij</button></div></div></div>
-<div id="aip" class="modal hide"><div class="mbox"><h2>Podgląd – Wyślij do AI</h2><p class="small"><b>RODO:</b> tekst opuści telefon i trafi do wybranej aplikacji AI. Usunięto automatycznie PESEL, telefony, daty, adresy i e-maile – <b>sprawdź podgląd</b> i usuń pozostałe dane osobowe. Odpowiedzialność za przekazanie danych spoczywa na użytkowniku; zgodność z polityką szpitala – DO WERYFIKACJI z IOD.</p><textarea id="aipT" rows="12"></textarea><label class="small"><input type="checkbox" id="aipOk"> Sprawdziłem/am – brak danych osobowych</label><div class="row"><button id="aipGo" class="y">Udostępnij…</button><button id="aipX">Anuluj</button></div></div></div>
+<div id="wyw" class="modal hide"><div class="mbox"><h2>Wywiad</h2><p class="small">Dyktuj klawiaturą (ikona mikrofonu na klawiaturze). Nie wpisuj nazwiska ani PESEL. Przy zapisie aplikacja sama usuwa dane osobowe (PESEL, telefony, daty, adresy, e-maile, imiona i nazwiska).</p><textarea id="wywT" rows="9"></textarea><div class="row"><button id="wywS" class="y">Zapisz</button><button id="wywX">Zamknij</button></div></div></div>
+<div id="aip" class="modal hide"><div class="mbox"><h2>Podgląd – Wyślij do AI</h2><p class="small"><b>RODO:</b> tekst opuści telefon i trafi do wybranej aplikacji AI. Usunięto automatycznie PESEL, telefony, daty, adresy, e-maile, imiona i nazwiska – <b>sprawdź podgląd</b> i usuń pozostałe dane osobowe. Odpowiedzialność za przekazanie danych spoczywa na użytkowniku; zgodność z polityką szpitala – DO WERYFIKACJI z IOD.</p><textarea id="aipT" rows="12"></textarea><label class="small"><input type="checkbox" id="aipOk"> Sprawdziłem/am – brak danych osobowych</label><div class="row"><button id="aipGo" class="y">Udostępnij…</button><button id="aipX">Anuluj</button></div></div></div>
 <div id="exitq" class="modal hide"><div class="mbox"><h2>Akcja RKO trwa</h2><p>Wyjście nie kończy akcji – zapis i metronom działają dalej w tle.</p><div class="row"><button id="exitStay" class="y">Zostań</button><button id="exitBg">Zminimalizuj</button></div></div></div>
+<div id="emq" class="modal hide"><div class="mbox"><h2>Twój e-mail (archiwum raportów)</h2><p class="small">Raport DOCX bez danych osobowych trafi na ten adres. Adres zapisze się w Ustawieniach.</p><input id="emqI" type="email" inputmode="email" autocomplete="email" placeholder="lekarz@szpital.pl"><p id="emqE" class="small"></p><div class="row"><button id="emqGo" class="y">Zapisz i wyślij</button><button id="emqX">Anuluj</button></div></div></div>
 <div id="pad" class="pad hide"><div id="padv">&nbsp;</div><div class="padg"></div></div>
 <script src="nacl.min.js"></script><script src="lic.js"></script><script src="core.js"></script><script src="docx.js"></script><script src="voice.js"></script><script src="ui.js"></script><script src="selftest.js"></script>
 </body></html>

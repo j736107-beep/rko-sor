@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). */
 (function(root){
 'use strict';
-const VERSION='1.9.6';
+const VERSION='1.9.7';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -227,8 +227,13 @@ const SAY={
  spo2:'Podaj saturację.',ekg:'Czy EKG 12-odprowadzeniowe wykonane?',stemi:'Czy jest STEMI?',temp:'Podaj temperaturę w stopniach.',
  bradySigns:'Bradykardia. Czy są objawy niepokojące: hipotensja, zaburzenia świadomości, ból w klatce piersiowej lub niewydolność serca?',
  bradyNoSigns:'Bez objawów niepokojących. Monitoruj i szukaj przyczyny.',
- bradyHtx:'Czy to blok drugiego stopnia typu Mobitz 2, blok trzeciego stopnia lub pacjent po przeszczepie serca?',
- bradyHtxYes:'Atropina może być nieskuteczna. Przygotuj stymulację przezskórną.',
+ bradyHtx:'Czy to blok drugiego lub trzeciego stopnia z szerokim QRS albo pacjent po przeszczepie serca?',
+ bradyHtxYes:'Nie podawaj atropiny. Przygotuj stymulację przezskórną. Lek drugiego rzutu: izoprenalina albo adrenalina we wlewie. Po przeszczepie serca rozważ aminofilinę 100 do 200 miligramów dożylnie powoli.',
+ glucagon:'Jeśli przyczyną mogą być beta-blokery lub blokery kanału wapniowego, rozważ glukagon 3 do 10 miligramów dożylnie przez 1 do 2 minut.',
+ vector:'Jeśli migotanie się utrzyma, w trakcie uciskania przyklej elektrody przednio-tylnie. Zmiana wektora wyładowania.',
+ tempGoal:'Pacjent nieprzytomny: aktywnie zapobiegaj gorączce, cel 37,5 stopnia lub mniej, przez 72 godziny.',
+ tempHigh:'Temperatura powyżej 37,5 stopnia. Aktywnie obniż temperaturę.',
+ co2Goal:'Wentylacja: normokapnia, dwutlenek węgla we krwi tętniczej 35 do 45 milimetrów słupa rtęci.',
  bHR:'Podaj tętno.',bSBP:'Podaj ciśnienie skurczowe.',bSym:'Czy objawy ustąpiły?',
  bKeepAtro:'Utrzymaj. Obserwuj, bez kolejnej dawki.',
  atroMax:'Maksymalna dawka atropiny osiągnięta. Przejdź do stymulacji przezskórnej.',
@@ -284,7 +289,7 @@ P.start=function(o){o=o||{};const now=this.now();this.s={mode:'arrest',sim:!!o.s
  airway:'worek z maską 30:2',intub:null,etco2:[],paused:false,decided:false,email:o.email||'',rosc:[],post:{},atropine:0,torsadeAsked:false,endAsk:false,sentQ:false,mapStep:null};
  const s=this.s;this.log('start','Start NZK'+(s.sim?' (SYMULACJA)':''));
  if(s.sim)this.simInit();
- this.say((s.sim?SAY.sim+' ':'')+SAY.start);this.say(SAY.call);this.say(SAY.defib);this.say(SAY.iv);
+ this.say((s.sim?SAY.sim+' ':'')+SAY.start);this.say(SAY.call);this.say(SAY.defib);this.say(SAY.iv);if(s.sim&&s.simPt&&s.simPt.zrm)this.say('Symulacja: pacjent przywieziony, RKO od '+s.simPt.zrm+' minut przed przyjazdem.','sim');
  // pierwsza ocena rytmu od razu po komunikatach startowych
  this.ask('rhythm',SAY.rhythm,{prio:2});this.ask('team',SAY.team,{def:'skip',tries:1});
  return s};
@@ -296,7 +301,7 @@ P.ask=function(id,text,o){o=o||{};const q={id,text,def:o.def,tries:o.tries==null
  this.pump();return q};
 P.has=function(id){const s=this.s;return (s.cur&&s.cur.id===id)||s.q.some(x=>x.id===id)};
 P.drop=function(id){const s=this.s;s.q=s.q.filter(x=>x.id!==id);if(s.cur&&s.cur.id===id){s.cur=null;this.pump()}};
-P.pump=function(){const s=this.s;if(s.cur||!s.q.length||s.paused)return;s.cur=s.q.shift();s.cur.at=this.now();s.cur.t0=s.cur.at;s.cur.rem=0;this.say(s.cur.text,'ask');this.persist(s)};
+P.pump=function(){const s=this.s;if(s.cur||!s.q.length||s.paused)return;s.cur=s.q.shift();if(s.mode==='rosc'&&/^(spo2|ekg|temp|glu|gcs)$/.test(s.cur.id)){s.postAsked=s.postAsked||{};s.postAsked[s.cur.id]=1}s.cur.at=this.now();s.cur.t0=s.cur.at;s.cur.rem=0;this.say(s.cur.text,'ask');this.persist(s)};
 P.tick=function(){const s=this.s,now=this.now();if(s.mode==='idle'||s.mode==='ended')return;s.nowT=now;
  if(s.paused)return;
  if(s.cur&&s.cur.timeout&&now-(s.cur.t0||s.cur.at)>=s.cur.timeout){const c0=s.cur;s.cur=null;this.answer(c0,{cmd:'default',def:c0.def,timeout:true});this.pump()}
@@ -337,12 +342,17 @@ P.giveAmio=function(lido){const s=this.s;const first=(s.amio+s.lido)===0;if(lido
  else{s.amio++;this.log('lek','Amiodaron '+(first?'300':'150')+' mg',{drug:'amiodaron',dose:first?'300 mg':'150 mg'})}
  this.drop('amio');this.say(SAY.logged+(lido?' lidokaina.':' amiodaron.'),'ack')};
 P.shockDone=function(){const s=this.s;s.shocks++;this.drop('shock');this.log('wyładowanie','Wyładowanie nr '+s.shocks,{n:s.shocks});
+ // v1.9.7: ERC 2025 – początkowa seria do 3 wyładowań seryjnych liczy się jako 1. wyładowanie (adrenalina, amiodaron)
+ {const t=this.now();if(this.stacked&&s.scen!=='przywieziony'){if(s.shocks===1&&!s.zrmMin){s.stackT=t;s.stackExtra=0}else if(s.stackT!=null&&!s.stackDone&&s.shocks<=3&&t-s.stackT<=90*MS){s.stackExtra=(s.stackExtra||0)+1;s.epStack=(s.epStack||0)+1;this.log('wyładowanie','Seria wyładowań seryjnych: '+s.shocks+'. (liczona jako 1. wyładowanie – ERC 2025)');if(s.shocks===3)s.stackDone=true}else if(s.stackT!=null)s.stackDone=true}}
  if(s.sim)this.simAfterShock();
  this.newCycle(SAY.afterShock);
- s.epShocks=(s.epShocks||0)+1;const am=s.amio+s.lido,now=this.now();
- if(s.epShocks>=3&&!this.has('adr')&&(!s.adrDue||s.adrDue<=now)){s.adrHold=false;this.ask('adr',SAY.adr,{prio:1})}
- if(s.shocks>=3&&am===0&&!this.has('amio'))this.ask('amio',SAY.amio300,{prio:1});
- else if(s.shocks>=5&&am===1&&!this.has('amio'))this.ask('amio',SAY.amio150,{prio:1})};
+ s.epShocks=(s.epShocks||0)+1;const am=s.amio+s.lido,now=this.now();const effEp=s.epShocks-(s.epStack||0),eff=effShocks(s);
+ if(effEp>=3&&!this.has('adr')&&(!s.adrDue||s.adrDue<=now)){s.adrHold=false;this.ask('adr',SAY.adr,{prio:1})}
+ if(eff>=3&&am===0&&!this.has('amio'))this.ask('amio',SAY.amio300,{prio:1});
+ else if(eff>=5&&am===1&&!this.has('amio'))this.ask('amio',SAY.amio150,{prio:1});
+ // v1.9.7: ERC 2025 – VF oporne (3 nieudane wyładowania): zmiana wektora, elektrody przednio-tylne
+ if(effEp===3&&!s.vecSaid){s.vecSaid=true;this.say(SAY.vector);this.log('wyładowanie','Po 3 wyładowaniach: rozważ zmianę wektora – elektrody przednio-tylne (ERC 2025)')}};
+function effShocks(s){return (s.shocks||0)-(s.stackExtra||0)}
 P.noteInit=function(c,lab){const s=this.s;if(s.initRhythm)return;const t=norm(s.heard||'');let v=null;if(lab&&lab!=='VF/pVT'){s.initRhythm=lab;this.log('decyzja','Rytm początkowy: '+lab+(lab==='asystolia'?' (ASYSTOLIA – czynnik rokowniczy)':''));return}
  if(c==='shockable')v=/vt|czestoskurcz/.test(t)&&!/vf|migotan/.test(t)?'pVT':'VF';else if(c==='nonshock'||c==='nopulse')v=/asyst/.test(t)?'asystolia':(/pea|tetna|elektryczn|rozkojarz/.test(t)||/^(pe a|pe e a)$/.test(t))?'PEA':'asystolia/PEA';else if(c==='organised'||c==='pulse')v='rytm zorganizowany';else if(c==='brady')v='bradykardia';
  if(v){s.initRhythm=v;this.log('decyzja','Rytm początkowy: '+v+(v==='asystolia'?' (ASYSTOLIA – czynnik rokowniczy)':''))}};
@@ -417,14 +427,14 @@ P._answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cm
  case 'noraGo':if(yes)this.log('lek','Noradrenalina – pompa uruchomiona '+flowPhrase(s.nora.mlh));else return false;break;
  case 'lowOut':if(yes)this.startDobu();else if(no||def){s.dobuAsked=true;this.say(SAY.dobuNo)}else return false;break;
  case 'dobuGo':if(yes)this.log('lek','Dobutamina – pompa uruchomiona');else return false;break;
- case 'spo2':if(r.num!=null){s.post.spo2=r.num;this.log('po ROSC','SpO₂ '+r.num+'%')}else if(!def)return false;break;
+ case 'spo2':if(r.num!=null){s.post.spo2=r.num;this.log('po ROSC','SpO₂ '+r.num+'%')}else if(!def)return false;this.co2Goal();break;
  case 'ekg':if(yes){s.post.ekg='tak';this.log('po ROSC','EKG 12-odpr. wykonane');this.ask('stemi',SAY.stemi,{def:'skip',tries:1})}else if(no||def){s.post.ekg='nie'}else return false;break;
  case 'stemi':if(yes){s.post.stemi='TAK';this.log('po ROSC','STEMI – kontakt z pracownią hemodynamiki')}else if(no){s.post.stemi='nie'}else if(!def)return false;break;
- case 'temp':if(r.num!=null){s.post.temp=r.num;this.log('po ROSC','Temperatura '+r.num+' °C')}else if(!def)return false;break;
+ case 'temp':if(r.num!=null){s.post.temp=r.num;this.log('po ROSC','Temperatura '+r.num+' °C')}else if(!def)return false;this.tempGoal(r.num);break;
  case 'bradySigns':if(yes){this.log('bradykardia','Objawy niepokojące: TAK');this.ask('bradyHtx',SAY.bradyHtx,{prio:2,def:'no',tries:1})}else if(no||def){this.log('bradykardia','Bez objawów niepokojących');this.say(SAY.bradyNoSigns)}else return false;break;
- case 'bradyHtx':if(yes){this.log('bradykardia','Mobitz II / blok III° / przeszczep serca');this.say(SAY.bradyHtxYes);this.startPacing();this.ask('bradyDrug',SAY.bradyDrug,{def:'iso',tries:2})}else if(no||def){this.ask('atro',atroText(this.atroDose,this.atroAmp),{prio:2})}else return false;break;
+ case 'bradyHtx':if(yes){this.log('bradykardia','Blok II/III° z szerokim QRS / przeszczep serca – NIE podawać atropiny (ERC 2025); aminofilina 100–200 mg i.v. po przeszczepie – do rozważenia');this.say(SAY.bradyHtxYes);this.startPacing();this.askBradyDrug({def:'iso',tries:2})}else if(no||def){this.ask('atro',atroText(this.atroDose,this.atroAmp),{prio:2})}else return false;break;
  case 'atro':if(yes){s.atropine=r1(s.atropine+this.atroDose);s.atroN=(s.atroN||0)+1;this.log('lek','Atropina '+fmt1(this.atroDose)+' mg i.v. (łącznie '+fmt1(s.atropine)+' mg, '+s.atroN+'. dawka)',{drug:'atropina',dose:fmt1(this.atroDose)+' mg'});this.say(SAY.logged+' atropina.','ack');
-  if(s.atropine>=3-1e-9){s.bNext=null;this.say(SAY.atroMax);this.startPacing();this.ask('bradyDrug',SAY.bradyDrug,{def:'iso',tries:2})}else{s.bphase='atro';s.bNext=this.now()+3*60*MS}}else return false;break;
+  if(s.atropine>=3-1e-9){s.bNext=null;this.say(SAY.atroMax);this.startPacing();this.askBradyDrug({def:'iso',tries:2})}else{s.bphase='atro';s.bNext=this.now()+3*60*MS}}else return false;break;
  case 'bradyDrug':{const d=['iso','dopa','adrinf'].includes(c)?c:/adrenalin/.test(norm(r.text))?'adrinf':(def?'iso':null);if(!d)return false;this.startBinf(d);break}
  case 'which':{const t=norm(r.text);const k=/noradrenalin/.test(t)?'nora':/dobutamin/.test(t)?'dobu':/izopren|dopamin|adrenalin|bradykard|wlew/.test(t)?'binf':null;if(!k||!this.titratable().includes(k))return false;this.titrate(k,q.data);break}
  case 'hepQ':{const t=norm(r.text);const ind=/zator|pe\b|plucn/.test(t)?'pe':/wiencow|zawal|acs|ozw/.test(t)?'acs':null;if(!ind)return false;this.startInf('hep',ind);break}
@@ -453,7 +463,7 @@ P._answer=function(q,r){if(r.cmd==='next'){if(q.def==='skip'||q.def==='go')r={cm
  case 'binfGo':if(yes)this.log('lek',BINF[s.binf.d].name+' – pompa uruchomiona');else if(!def)return false;s.bphase='binf';s.bNext=this.now()+BINT[s.binf.d];break;
  case 'pace1':case 'pace2':case 'pace3':if(yes||no||def){const n=+q.id.slice(4);if(n<3)this.ask('pace'+(n+1),SAY['pace'+(n+1)],{prio:2,def:'go',tries:Infinity});else{this.log('stymulacja','Tryb na żądanie 70/min');this.say(SAY.pace4+(s.pacing.cardio?' '+SAY.cardio:''));s.pacing.mA=30;this.ask('paceCap',SAY.paceCap,{prio:2})}}else return false;break;
  case 'paceCap':if(yes){s.pacing.capture=s.pacing.mA;s.pacing.mA+=10;this.log('stymulacja','Wychwyt przy '+s.pacing.capture+' mA, ustawione '+s.pacing.mA+' mA');this.say(SAY.paceOk);this.ask('pacePulse',SAY.pacePulse,{prio:2})}
-  else if(no||c==='up'){if(s.pacing.mA>=this.paceMax){this.log('stymulacja','Brak wychwytu przy '+this.paceMax+' mA – kardiolog');this.alarm('pace');this.say(SAY.paceMax,'alarm');if(!s.binf&&!this.has('bradyDrug'))this.ask('bradyDrug',SAY.bradyDrug,{prio:1,def:'iso',tries:2})}else{if(!s.pacing.analg){s.pacing.analg=true;this.say(SAY.paceAnalg)}s.pacing.mA+=10;this.log('stymulacja','Prąd '+s.pacing.mA+' mA');this.say(paceUp(s.pacing.mA));this.ask('paceCap',SAY.paceCap,{prio:2})}}else return false;break;
+  else if(no||c==='up'){if(s.pacing.mA>=this.paceMax){this.log('stymulacja','Brak wychwytu przy '+this.paceMax+' mA – kardiolog');this.alarm('pace');this.say(SAY.paceMax,'alarm');if(!s.binf&&!this.has('bradyDrug'))this.askBradyDrug({prio:1,def:'iso',tries:2})}else{if(!s.pacing.analg){s.pacing.analg=true;this.say(SAY.paceAnalg)}s.pacing.mA+=10;this.log('stymulacja','Prąd '+s.pacing.mA+' mA');this.say(paceUp(s.pacing.mA));this.ask('paceCap',SAY.paceCap,{prio:2})}}else return false;break;
  case 'paceConsc':if(yes){this.log('sedacja','Pacjent przytomny – analgezja/sedacja (DO WERYFIKACJI)');s.sed={fent:0,mida:0};s.fentConc=this.fentConc;s.midaConc=this.midaConc;this.say(sedText(this)+' '+SAY.paceMon);this.ask('fentGo',SAY.fentGo,{prio:1,def:'skip',tries:2});this.ask('midaGo',SAY.midaGo,{prio:1,def:'skip',tries:2})}else if(no||def){this.say(SAY.paceNoSed)}else return false;break;
  case 'fentGo':case 'fentRep':case 'midaGo':case 'midaRep':{const f=q.id.startsWith('fent');if(no&&q.id.endsWith('Rep'))break;if(def&&q.id.endsWith('Go')){f?s.sedFentT=this.now()+4*60*MS:s.sedMidaT=this.now()+150*MS;break}if(def)break;
   let ml=r.num!=null&&r.num>0&&r.num<=10?r.num:(yes?(f?25/this.fentConc:1/this.midaConc):null);if(ml==null)return false;this.giveSed(f,ml);break}
@@ -507,6 +517,7 @@ P.setKg=function(kg){const s=this.s;s.kg=kg;s.kgAssumed=false;this.log('masa','K
  if(s.nora){s.nora.mlh=noraMlh(s.nora.dose,kg,s.syr);this.say('Noradrenalina. '+SAY.setPump+' '+flowPhrase(s.nora.mlh)+'.')}
  if(s.dobu){s.dobu.mlh=dobuMlh(s.dobu.dose,kg);this.say('Dobutamina. '+SAY.setPump+' '+flowPhrase(s.dobu.mlh)+'.')}
  if(s.binf&&BINF[s.binf.d].unit==='kgmin'){s.binf.mlh=binfMlh(s.binf.d,s.binf.dose,kg,this.conc);this.say('Dopamina. '+SAY.setPump+' '+flowPhrase(s.binf.mlh)+'.')}};
+P.askBradyDrug=function(o){const s=this.s;if(!s.glucSaid){s.glucSaid=true;this.say(SAY.glucagon);this.log('bradykardia','Przypomnienie: glukagon 3–10 mg i.v. przy podejrzeniu β-blokera/CCB (ERC 2025)')}this.ask('bradyDrug',SAY.bradyDrug,o)};
 P.startBrady=function(){this.log('bradykardia','Bradykardia – ścieżka ERC 2025');this.ask('bradySigns',SAY.bradySigns,{prio:2,def:'yes',tries:2})};
 P.startBinf=function(d){const s=this.s;if(BINF[d].unit==='kgmin'&&!s.kg){s.binfPending=d;this.ask('weight',SAY.weight,{prio:2});return}s.binfPending=null;
  const c=binfConc(d,this.conc),dose=c.start,mlh=binfMlh(d,dose,s.kg,this.conc);s.binf={d,dose,mlh};
@@ -556,7 +567,12 @@ P.input=function(alts,src){const r0=interpret(alts,this.ctx());this._ack=r0.cmd=
 P.canUndo=function(){return !!(this.undoSnap&&this.now()-this.undoSnap.t<=5*MS&&this.s&&this.s.mode!=='ended')};
 P.undo=function(){if(!this.canUndo())return false;const u=this.undoSnap;this.undoSnap=null;this.s=JSON.parse(u.json);this.log('cofnięto','COFNIĘTO: '+u.label);this.say(SAY.undone,'ack');if(this.s.cur){this.s.cur.at=this.now();this.s.cur.t0=this.now()}this.pump();this.persist(this.s);return true};
 // wznowienie po zabiciu aplikacji – z oczekującym pytaniem klinicznym
-P.resume=function(st){this.s=st;const s=st,now=this.now();const keep=['rhythm','rhyAsy','pulse','shock','adr','amio','roscRhy','roscAf','team'];s.q=(s.q||[]).filter(q=>keep.includes(q.id));if(s.cur&&!keep.includes(s.cur.id))s.cur=null;if(s.cur){s.cur.at=now;s.cur.t0=now}s.paused=false;s.resumed=(s.resumed||0)+1;this.log('wznowienie','Wznowiono po przerwie aplikacji');this.say('Wznawiam.','ack');if(s.cur)this.say(s.cur.text,'ask');else this.pump();this.persist(s)};
+P.resume=function(st){this.s=st;const s=st,now=this.now();const keep=['rhythm','rhyAsy','pulse','shock','adr','amio','roscRhy','roscAf','team'];
+ // v1.9.7 (B3): po ROSC zachowaj pomiary (ciśnienie, SpO₂, EKG, temperatura, glikemia, GCS) i przywróć pętlę ciśnienia
+ if(s.mode==='rosc')keep.push('sys','dia','spo2','ekg','stemi','temp','glu','gcs','weight','syr','hepRoscQ','noraGo','dobuGo','bHR','bSBP','bSym','bradySigns','bradyHtx','atro','bradyDrug');
+ s.q=(s.q||[]).filter(q=>keep.includes(q.id));if(s.cur&&!keep.includes(s.cur.id))s.cur=null;if(s.cur){s.cur.at=now;s.cur.t0=now}s.paused=false;
+ if(s.mode==='rosc'&&this.full){const has=id=>(s.cur&&s.cur.id===id)||s.q.some(x=>x.id===id);if(!s.nextMap&&!has('sys')&&!has('dia'))s.q.push({id:'sys',text:SAY.sys,tries:Infinity,prio:0,asked:0,at:null,rem:0});
+  [['spo2',s.post.spo2==null],['ekg',!s.post.ekg],['temp',s.post.temp==null],['glu',s.post.glu==null],['gcs',s.post.gcs==null]].forEach(([id,miss])=>{if(miss&&!has(id)&&!(s.postAsked||{})[id])s.q.push({id,text:SAY[id],def:'skip',tries:2,prio:0,asked:0,at:null,rem:0})})}s.resumed=(s.resumed||0)+1;this.log('wznowienie','Wznowiono po przerwie aplikacji');this.say('Wznawiam.','ack');if(s.cur)this.say(s.cur.text,'ask');else this.pump();this.persist(s)};
 P._input=function(alts){const s=this.s;const r=interpret(alts,this.ctx());s.heard=r.text;
  if(s.mode==='idle'||s.mode==='ended'){if(r.cmd==='replay')this.replay();if(r.cmd==='send')return 'send';return r.cmd}
  // komendy globalne
@@ -607,8 +623,11 @@ P.toRosc=function(){const s=this.s,now=this.now();s.mode='rosc';s.rosc.push(now)
  if(!s.post.spo2)this.ask('spo2',SAY.spo2,{def:'skip',tries:2});if(!s.post.ekg)this.ask('ekg',SAY.ekg,{def:'skip',tries:2});if(!s.post.temp)this.ask('temp',SAY.temp,{def:'skip',tries:2});if(s.post.glu==null)this.ask('glu',SAY.glu,{def:'skip',tries:2});if(s.post.gcs==null)this.ask('gcs',SAY.gcs,{def:'skip',tries:2})};
 function roscRhyOf(t){t=norm(t);if(!t)return null;if(/bradykard/.test(t))return 'bradykardia';if(/przedsionk|\baf\b|\ba ef\b|bezwzgledn|niemiarow|trzepotan/.test(t))return 'migotanie przedsionków';if(/zatok|sinus/.test(t))return 'zatokowy';
  if(/nadkomor|wezlow|inny|inna|zorganizowany/.test(t))return /nadkomor/.test(t)?'nadkomorowy':/wezlow/.test(t)?'węzłowy':'inny';const w=t.split(' ');if(w.some(x=>lev(x,'zatokowy')<=1||lev(x,'zatoka')<=1))return 'zatokowy';if(w.some(x=>lev(x,'przedsionkow')<=2))return 'migotanie przedsionków';return null}
+// v1.9.7: ERC–ESICM 2025 – cele po ROSC (raz na epizod)
+P.co2Goal=function(){const s=this.s;if(s.co2Said)return;s.co2Said=true;this.say(SAY.co2Goal);this.log('po ROSC','Cel: normokapnia PaCO₂ 35–45 mmHg (ERC–ESICM 2025)')};
+P.tempGoal=function(t){const s=this.s;const hi=t!=null&&t>37.5;if(s.tempSaid&&!hi)return;s.tempSaid=true;this.say((hi?SAY.tempHigh+' ':'')+SAY.tempGoal);this.log('po ROSC','Cel: zapobieganie gorączce ≤37,5 °C przez 72 h u nieprzytomnego (ERC–ESICM 2025)'+(hi?' – temperatura '+String(t).replace('.',',')+' °C':''))};
 P.setRoscRhy=function(v){const s=this.s;s.roscRhythm=v;this.log('rytm','Rytm po ROSC: '+v)};
-P.toArrest=function(quiet){const s=this.s;s.mode='arrest';s.q=[];s.cur=null;s.nextMap=null;s.bNext=null;s.sedFentT=null;s.sedMidaT=null;s.epShocks=0;s.adrHold=true;s.rhythm='?';this.log('NZK','Ponowne zatrzymanie krążenia');s.cycleT=this.now();s.warned=false;if(!quiet)this.say(SAY.rearrest);
+P.toArrest=function(quiet){const s=this.s;s.mode='arrest';s.q=[];s.cur=null;s.nextMap=null;s.bNext=null;s.sedFentT=null;s.sedMidaT=null;s.epShocks=0;s.epStack=0;s.vecSaid=false;s.adrHold=true;s.rhythm='?';this.log('NZK','Ponowne zatrzymanie krążenia');s.cycleT=this.now();s.warned=false;if(!quiet)this.say(SAY.rearrest);
  s.offStart=this.now();this.ask('rhythm',SAY.rhythm,{prio:2})};
 // pętla MAP (stała, co 5 min)
 P.onMap=function(m,sy,di){const s=this.s;s.lastMap=m;this.log('ciśnienie',sy+'/'+di+' mmHg, MAP '+m,{map:m});s.nextMap=this.now()+MAPI;
@@ -639,7 +658,9 @@ P.finish=function(){const s=this.s;if(s.mode==='ended')return;if(s.offStart){s.h
 const SIMR=['VF','pVT','asystolia','PEA'],SIMC=['hiperkaliemia','zatorowość płucna','tamponada','hipowolemia','hipoksja','toksyny'];
 P.simInit=function(){const s=this.s,R=this.rand;s.simPt={age:25+Math.floor(R()*60),kg:50+Math.floor(R()*8)*10,scen:R()<.5?'SOR':'przywieziony'};
  s.simRhythm=SIMR[Math.floor(R()*4)];s.simCause=SIMC[Math.floor(R()*SIMC.length)];s.simTreated=false;s.simBP=null;
- s.kg=s.kg||s.simPt.kg;this.log('symulacja','Pacjent: '+s.simPt.age+' lat, '+s.simPt.kg+' kg, '+s.simPt.scen+', rytm '+s.simRhythm+', przyczyna: '+s.simCause)};
+ s.kg=s.kg||s.simPt.kg;this.log('symulacja','Pacjent: '+s.simPt.age+' lat, '+s.simPt.kg+' kg, '+s.simPt.scen+', rytm '+s.simRhythm+', przyczyna: '+s.simCause);
+ // v1.9.7 (B8): wylosowany „przywieziony” = scenariusz przywieziony z czasem RKO przed przyjazdem
+ if(s.simPt.scen==='przywieziony'){s.simPt.zrm=5+Math.floor(R()*16);this.setZrm(s.simPt.zrm,true)}};
 P.simShow=function(){const s=this.s;s.simEvents=(s.simEvents||0)+1;
  const shockable=s.simRhythm==='VF'||s.simRhythm==='pVT';const R=this.rand();
  let p=.05;if(shockable&&s.shocks>=3&&(s.amio||s.lido))p+=.25;if(s.simTreated)p+=.35;if(!shockable&&s.adr.length)p+=.1;
@@ -649,10 +670,11 @@ P.simAfterShock=function(){};P.simForce=function(){const s=this.s;s.simRhythm=SI
 P.simSummary=function(){const s=this.s,L=s.log,good=[],late=[],miss=[];const t0=s.t0;
  const rh=L.filter(e=>e.type==='rytm'&&e.shockable),sh=L.filter(e=>e.type==='wyładowanie'&&e.n);
  if(rh.length&&sh.length){const dt=(sh[0].t-rh[0].t)/MS;(dt<=120?good:late).push('Pierwsze wyładowanie po '+Math.round(dt)+' s od rozpoznania rytmu')}
- good.push('Ucisk od startu (komunikat w 0 s)');
  const a=s.adr;for(let i=1;i<a.length;i++){const m=(a[i]-a[i-1])/60000;if(m>5.5)late.push('Adrenalina po '+m.toFixed(1)+' min (zalecane 3–5)')}
- if(a.length)good.push('Adrenalina podana '+a.length+'×');else miss.push('Brak adrenaliny');
- if(s.shocks>=3&&!(s.amio||s.lido))miss.push('Brak amiodaronu/lidokainy po 3. wyładowaniu');
+ // v1.9.7 (B8): brak adrenaliny jest błędem tylko, gdy była wskazana (rytm niedefibrylacyjny albo ≥3 wyładowania)
+ const adrInd=L.some(e=>e.type==='rytm'&&e.shockable===false)||effShocks(s)>=3;
+ if(a.length)good.push('Adrenalina podana '+a.length+'×');else if(adrInd)miss.push('Brak adrenaliny');
+ if(effShocks(s)>=3&&!(s.amio||s.lido))miss.push('Brak amiodaronu/lidokainy po 3. wyładowaniu');
  if(s.ht[s.simCause]==='✓')good.push('Rozpoznano przyczynę: '+s.simCause);else miss.push('Nie leczono przyczyny: '+s.simCause);
  if(!s.intub&&s.airway.indexOf('nadgłośniowy')<0)miss.push('Brak zabezpieczenia dróg oddechowych');if(!s.etco2.length)miss.push(s.etco2Avail===false?'Kapnografia niedostępna (nie używana)':'Brak kapnografii');
  if(s.handsOff/Math.max(1,s.cycles)>10)late.push('Średnia przerwa w ucisku '+(s.handsOff/Math.max(1,s.cycles)).toFixed(0)+' s (cel <5–10 s)');
@@ -660,16 +682,17 @@ P.simSummary=function(){const s=this.s,L=s.log,good=[],late=[],miss=[];const t0=
  return {good,late,miss,speech,handsOff:Math.round(s.handsOff),shocks:s.shocks}};
 // ---------- raport ----------
 function hhmm(t){const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0')}
-function report(s){const L=s.log||[],end=s.tEnd||Date.now();const dur=Math.round((end-s.arrestT)/60000);
+function durTxt(ms){ms=Math.max(0,ms||0);const t=Math.floor(ms/1000);return Math.floor(t/60)+' min '+String(t%60).padStart(2,'0')+' s'}
+function report(s){const L=s.log||[],end=s.tEnd||s.nowT||Date.now();const dur=durTxt(end-s.arrestT);
  const drugs=L.filter(e=>e.type==='lek').map(e=>[hhmm(e.t),e.txt]);
  const sum=[['Tryb',s.sim?'SYMULACJA – nie do dokumentacji pacjenta':'Rzeczywisty'],['Scenariusz',s.scen||'SOR'],['Godzina NZK',hhmm(s.arrestT)],['Start prowadzenia',hhmm(s.t0)],
-  ['ROSC',s.rosc.length?s.rosc.map(hhmm).join(', ')+(s.roscRhythm?' – rytm: '+s.roscRhythm:''):'nie'],['Rytm po ROSC',s.roscRhythm||(s.rosc.length?'—':'nie dotyczy')],['Rytm początkowy',s.initRhythm||'—'],['Zakończenie',s.tEnd?hhmm(s.tEnd):'w toku'],['Czas RKO',dur+' min'],
-  ['Wyładowania',String(s.shocks)],['Adrenalina',s.adr.length+' × 1 mg'],['Amiodaron / lidokaina',s.amio+' / '+s.lido],
+  ['ROSC',s.rosc.length?s.rosc.map(hhmm).join(', ')+(s.roscRhythm?' – rytm: '+s.roscRhythm:''):'nie'],['Rytm po ROSC',s.roscRhythm||(s.rosc.length?'—':'nie dotyczy')],['Rytm początkowy',s.initRhythm||'—'],['Zakończenie',s.tEnd?hhmm(s.tEnd):'w toku'],['Czas RKO',dur],
+  ['Wyładowania',String(s.shocks)+(s.stackExtra?' (w tym seria '+(s.stackExtra+1)+' seryjnych, liczona jako 1. – ERC 2025)':'')],['Adrenalina',s.adr.length+' × 1 mg'],['Amiodaron / lidokaina',s.amio+' / '+s.lido],
   ['Przerwy w ucisku (szac.)',Math.round(s.handsOff)+' s łącznie, najdłuższa '+Math.round(s.maxOff)+' s'],['Przerwy LUCAS',s.lucasN?(s.lucasN+'×, łącznie '+Math.round(s.lucasOffT)+' s'):'–'],['Drogi oddechowe',s.airway+(s.tube?', rurka nr '+fmt1(s.tube):'')],['POCUS',s.usgRes||'—'],
   ['EtCO₂',s.etco2.length?s.etco2.map(e=>e.v).join(', ')+' mmHg':s.etco2Avail===false?'nie mierzono (brak kapnografii)':'brak danych'],
   ['Noradrenalina',s.nora?fmt1(s.nora.mlh)+' ml/h ('+String(s.nora.dose).replace('.',',')+' µg/kg/min), '+NORA[s.syr].mg+' mg/'+NORA[s.syr].ml+' ml':'nie'],
   ['Dobutamina',s.dobu?fmt1(s.dobu.mlh)+' ml/h ('+fmt1(s.dobu.dose)+' µg/kg/min), 250 mg/50 ml':'nie'],['Masa ciała',s.kg?s.kg+' kg':'—'],
-  ['Ostatnie ciśnienie średnie',s.lastMap!=null?s.lastMap+' mmHg':'—'],['SpO₂',s.post.spo2!=null?s.post.spo2+'%':'—'],['EKG 12-odpr. / STEMI',(s.post.ekg||'—')+' / '+(s.post.stemi||'—')],['Bradykardia – leki',s.atropine?'atropina '+fmt1(s.atropine)+' mg ('+(s.atroN||0)+' dawek)':'—'],['Wlew w bradykardii',s.binf?BINF[s.binf.d].name+' '+fmt1(s.binf.mlh)+' ml/h ('+String(s.binf.dose).replace('.',',')+(BINF[s.binf.d].unit==='kgmin'?' µg/kg/min':' µg/min')+')':'nie'],['Stymulacja przezskórna',s.cprPace&&!s.pacing?'w trakcie RKO (załamki P bez QRS), prąd maksymalny, 70/min':s.pacing?(s.pacing.capture?'wychwyt '+s.pacing.capture+' mA, ustawione '+s.pacing.mA+' mA, 70/min':'bez wychwytu ('+(s.pacing.mA||'—')+' mA)')+', elektrody '+(s.pacing.el==='al'?'przednio-boczne':'przednio-tylne'):'nie'],['Analgosedacja',s.sed?'fentanyl '+fmt1(s.sed.fent)+' ml ('+Math.round(s.sed.fent*(s.fentConc||50))+' µg, '+(s.fentConc||50)+' µg/ml), midazolam '+fmt1(s.sed.mida)+' ml ('+fmt1(s.sed.mida*(s.midaConc||1))+' mg, '+fmt1(s.midaConc||1)+' mg/ml)':'nie'],['Temperatura',s.post.temp!=null?s.post.temp+' °C':'—'],['Glikemia',s.post.glu!=null?s.post.glu+' mg/dl':'—'],['GCS',s.post.gcs!=null?String(s.post.gcs):'—'],['Masa ciała – źródło',s.kgAssumed?'PRZYJĘTA 70 kg (nieznana)':s.kg?'podana':'—'],['Czas RKO: ZRM / SOR / całkowity',(s.zrmMin!=null?s.zrmMin+' min':'—')+' / '+Math.floor(((s.tEnd||s.nowT||Date.now())-s.t0)/60000)+' min / '+Math.floor(((s.tEnd||s.nowT||Date.now())-s.arrestT)/60000)+' min'],['Decyzja – dane',(s.initRhythm?'rytm początkowy: '+s.initRhythm:'rytm początkowy: —')+'; ETCO2: '+(s.etco2.map(e=>hhmm(e.t).slice(0,5)+' '+e.v).join(', ')||'—')+'; POCUS: '+((s.pocus||[]).map(e=>hhmm(e.t).slice(0,5)+' '+e.v).join(', ')||'—')+'; decyzje kierującego: '+(s.log.filter(e=>e.type==='decyzja'&&/Kierujący|Wyjątek/.test(e.txt)).map(e=>hhmm(e.t).slice(0,5)+' '+e.txt).join('; ')||'—')+'. ETCO2 i POCUS same w sobie nie wystarczają do decyzji o zakończeniu RKO (ERC 2025). Lektor nie rekomenduje zakończenia – decyzja należy do kierującego.'],['Hiperkaliemia – insulina/glukoza',s.hk&&s.hk.t0?('insulina Novorapid 10 j. penem do portu kroplówki – praktyka lokalna; ChPL NovoRapid dopuszcza podanie dożylne tylko z fiolki – DO WERYFIKACJI + glukoza 10% 250 ml (25 g) o '+hhmm(s.hk.t0).slice(0,5)+(s.hk.arrest?' (NZK, pełny strumień)':' (15 min)')+'; glikemia przed: '+(s.hk.pre!=null?s.hk.pre+' mg/dl':'nieznana')+(s.hk.proph?'; profilaktyka hipoglikemii G10% 5 h':'')+'; glikemie: '+(s.hk.glu.map(g=>hhmm(g.t).slice(0,5)+' '+g.v).join(', ')||'—')+'; potas: '+(s.hk.k.map(g=>hhmm(g.t).slice(0,5)+' '+fmt1(g.v)).join(', ')||'—')+'. Uwaga: lektor celowo podaje jednostki insuliny i mililitry (wyjątek od zasady „tylko ml” – bezpieczeństwo).'):'—'],['Heparyna – bezpieczeństwo',s.hepGateTxt||'—'],['Heparyna',s.infs&&s.infs.hep?((s.infs.hep.noBolus?'bez bolusu (trwający wlew – reguła lokalna użytkownika)':'bolus '+(s.infs.hep.half?'POŁOWA (reguła lokalna użytkownika) ':'')+s.infs.hep.bu+' j. ('+fmt2(s.infs.hep.bml)+' ml)')+(s.infs.hep.aptt?'; wlew '+s.infs.hep.rate+' j./h = '+HEPR[s.infs.hep.ind]+' j./kg/h'+(s.infs.hep.rate<HEPR[s.infs.hep.ind]*s.kg?' (limit '+HEPRMAX[s.infs.hep.ind]+' j./h)':'')+', '+fmt1(s.infs.hep.mlh)+' ml/h; APTT o '+hhmm(s.infs.hep.aptt).slice(0,5):'; wlew – po ROSC')+' ('+(s.infs.hep.ind==='pe'?'zatorowość płucna':'OZW')+')'):'—'],['Amiodaron wlew',s.infs&&s.infs.amio&&s.infs.amio.drip?('kroplówka: podano w RKO '+s.infs.amio.given+' mg; pozostało '+s.infs.amio.rem+' mg w 500 ml glukozy 5% ('+fmt1(s.infs.amio.conc)+' mg/ml) = '+fmt1(s.infs.amio.mgh)+' mg/h; '+s.infs.amio.dpm+' kropli/min (zestaw '+s.infs.amio.set+' kropli/ml); '+(s.infs.amio.central?'centralnie':'obwodowo')+'; koniec o '+hhmm(s.infs.amio.end).slice(0,5)):s.infs&&s.infs.amio?('podano w RKO '+s.infs.amio.given+' mg; pozostało '+s.infs.amio.rem+' mg/24 h = '+fmt1(s.infs.amio.mgh)+' mg/h; '+fmt1(s.infs.amio.mlh)+' ml/h (900 mg/'+s.infs.amio.vol+' ml glukozy 5%, '+(s.infs.amio.central?'centralnie':'obwodowo')+'); koniec o '+hhmm(s.infs.amio.end).slice(0,5)):'nie']];
+  ['Ostatnie ciśnienie średnie',s.lastMap!=null?s.lastMap+' mmHg':'—'],['SpO₂',s.post.spo2!=null?s.post.spo2+'%':'—'],['EKG 12-odpr. / STEMI',(s.post.ekg||'—')+' / '+(s.post.stemi||'—')],['Bradykardia – leki',s.atropine?'atropina '+fmt1(s.atropine)+' mg ('+(s.atroN||0)+' dawek)':'—'],['Wlew w bradykardii',s.binf?BINF[s.binf.d].name+' '+fmt1(s.binf.mlh)+' ml/h ('+String(s.binf.dose).replace('.',',')+(BINF[s.binf.d].unit==='kgmin'?' µg/kg/min':' µg/min')+')':'nie'],['Stymulacja przezskórna',s.cprPace&&!s.pacing?'w trakcie RKO (załamki P bez QRS), prąd maksymalny, 70/min':s.pacing?(s.pacing.capture?'wychwyt '+s.pacing.capture+' mA, ustawione '+s.pacing.mA+' mA, 70/min':'bez wychwytu ('+(s.pacing.mA||'—')+' mA)')+', elektrody '+(s.pacing.el==='al'?'przednio-boczne':'przednio-tylne'):'nie'],['Analgosedacja',s.sed?'fentanyl '+fmt1(s.sed.fent)+' ml ('+Math.round(s.sed.fent*(s.fentConc||50))+' µg, '+(s.fentConc||50)+' µg/ml), midazolam '+fmt1(s.sed.mida)+' ml ('+fmt1(s.sed.mida*(s.midaConc||1))+' mg, '+fmt1(s.midaConc||1)+' mg/ml)':'nie'],['Temperatura',s.post.temp!=null?s.post.temp+' °C':'—'],['Cele po ROSC (ERC–ESICM 2025)',s.rosc.length?'SpO₂ 94–98%; normokapnia PaCO₂ 35–45 mmHg; MAP ≥65 mmHg; u nieprzytomnego aktywne zapobieganie gorączce ≤37,5 °C przez 72 h':'nie dotyczy'],['Glikemia',s.post.glu!=null?s.post.glu+' mg/dl':'—'],['GCS',s.post.gcs!=null?String(s.post.gcs):'—'],['Masa ciała – źródło',s.kgAssumed?'PRZYJĘTA 70 kg (nieznana)':s.kg?'podana':'—'],['Czas RKO: ZRM / SOR / całkowity',(s.zrmMin!=null?s.zrmMin+' min':'—')+' / '+durTxt(end-s.t0)+' / '+dur],['Decyzja – dane',(s.initRhythm?'rytm początkowy: '+s.initRhythm:'rytm początkowy: —')+'; ETCO2: '+(s.etco2.map(e=>hhmm(e.t).slice(0,5)+' '+e.v).join(', ')||'—')+'; POCUS: '+((s.pocus||[]).map(e=>hhmm(e.t).slice(0,5)+' '+e.v).join(', ')||'—')+'; decyzje kierującego: '+(s.log.filter(e=>e.type==='decyzja'&&/Kierujący|Wyjątek/.test(e.txt)).map(e=>hhmm(e.t).slice(0,5)+' '+e.txt).join('; ')||'—')+'. ETCO2 i POCUS same w sobie nie wystarczają do decyzji o zakończeniu RKO (ERC 2025). Lektor nie rekomenduje zakończenia – decyzja należy do kierującego.'],['Hiperkaliemia – insulina/glukoza',s.hk&&s.hk.t0?('insulina Novorapid 10 j. penem do portu kroplówki – praktyka lokalna; ChPL NovoRapid dopuszcza podanie dożylne tylko z fiolki – DO WERYFIKACJI + glukoza 10% 250 ml (25 g) o '+hhmm(s.hk.t0).slice(0,5)+(s.hk.arrest?' (NZK, pełny strumień)':' (15 min)')+'; glikemia przed: '+(s.hk.pre!=null?s.hk.pre+' mg/dl':'nieznana')+(s.hk.proph?'; profilaktyka hipoglikemii G10% 5 h':'')+'; glikemie: '+(s.hk.glu.map(g=>hhmm(g.t).slice(0,5)+' '+g.v).join(', ')||'—')+'; potas: '+(s.hk.k.map(g=>hhmm(g.t).slice(0,5)+' '+fmt1(g.v)).join(', ')||'—')+'. Uwaga: lektor celowo podaje jednostki insuliny i mililitry (wyjątek od zasady „tylko ml” – bezpieczeństwo).'):'—'],['Heparyna – bezpieczeństwo',s.hepGateTxt||'—'],['Heparyna',s.infs&&s.infs.hep?((s.infs.hep.noBolus?'bez bolusu (trwający wlew – reguła lokalna użytkownika)':'bolus '+(s.infs.hep.half?'POŁOWA (reguła lokalna użytkownika) ':'')+s.infs.hep.bu+' j. ('+fmt2(s.infs.hep.bml)+' ml)')+(s.infs.hep.aptt?'; wlew '+s.infs.hep.rate+' j./h = '+HEPR[s.infs.hep.ind]+' j./kg/h'+(s.infs.hep.rate<HEPR[s.infs.hep.ind]*s.kg?' (limit '+HEPRMAX[s.infs.hep.ind]+' j./h)':'')+', '+fmt1(s.infs.hep.mlh)+' ml/h; APTT o '+hhmm(s.infs.hep.aptt).slice(0,5):'; wlew – po ROSC')+' ('+(s.infs.hep.ind==='pe'?'zatorowość płucna':'OZW')+')'):'—'],['Amiodaron wlew',s.infs&&s.infs.amio&&s.infs.amio.drip?('kroplówka: podano w RKO '+s.infs.amio.given+' mg; pozostało '+s.infs.amio.rem+' mg w 500 ml glukozy 5% ('+fmt1(s.infs.amio.conc)+' mg/ml) = '+fmt1(s.infs.amio.mgh)+' mg/h; '+s.infs.amio.dpm+' kropli/min (zestaw '+s.infs.amio.set+' kropli/ml); '+(s.infs.amio.central?'centralnie':'obwodowo')+'; koniec o '+hhmm(s.infs.amio.end).slice(0,5)):s.infs&&s.infs.amio?('podano w RKO '+s.infs.amio.given+' mg; pozostało '+s.infs.amio.rem+' mg/24 h = '+fmt1(s.infs.amio.mgh)+' mg/h; '+fmt1(s.infs.amio.mlh)+' ml/h (900 mg/'+s.infs.amio.vol+' ml glukozy 5%, '+(s.infs.amio.central?'centralnie':'obwodowo')+'); koniec o '+hhmm(s.infs.amio.end).slice(0,5)):'nie']];
  const ht=HT.map(h=>[h[0],s.ht[h[0]]||'–']);
  return {sum,drugs,ht,timeline:L.map(e=>[hhmm(e.t),e.type,e.txt+(e.src?' ('+e.src+')':'')]),wywiad:s.wywiad||'',missing:sum.filter(x=>x[1]==='—').map(x=>x[0])}}
 // lista wszystkich stałych komunikatów (do generowania nagrań)
@@ -710,17 +733,60 @@ function btnKey(s){return s?(s.mode+'|'+(s.cur?s.cur.id+'|'+s.cur.text:'-')+'|'+
 function PressState(){this.key=null;this.act=null;this.t=0}
 PressState.prototype.press=function(c,now){this.act=c;this.t=now};
 PressState.prototype.sync=function(key,now){if(key!==this.key){this.key=key;this.act=null}else if(this.act!=null&&now-this.t>900)this.act=null;return this.act};
-// v1.9: usuwanie danych osobowych przed wysłaniem do AI (PESEL, telefon, daty, adresy, e-mail)
+// v1.9.7 (B4/B7): usuwanie danych osobowych – PESEL (także ze spacjami/myślnikami), telefony, e-maile, daty (cyfrowo i słownie), adresy, kody, imiona i nazwiska.
+// Zasada: AI nigdy nie dostaje identyfikatorów. Stosowane w AI, PDF, DOCX, e-mailu i przy zapisie wywiadu. opt.free=true – tekst wolny (wywiad): także heurystyka nazwisk.
 const AI_PROMPT='Popraw styl na medyczny, nie zmieniaj faktów ani dawek.';
-function anonymize(t){return String(t||'')
- .replace(/\b\d{11}\b/g,'[PESEL usunięty]')
- .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g,'[e-mail usunięty]')
- .replace(/\b\d{4}-\d{2}-\d{2}\b/g,'[data usunięta]')
- .replace(/\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b/g,'[data usunięta]')
- .replace(/(\+48[\s-]?)?\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b/g,'[telefon usunięty]')
- .replace(/\b\d{2}-\d{3}\b/g,'[kod usunięty]')
- .replace(/\b(ul\.|ulica|ulicy|al\.|aleja|alei|os\.|osiedle|osiedlu|pl\.|plac|placu|zam\.|zamieszkał[ya]?|zamieszkała)\s+[^\n,;.]*/gi,'[adres usunięty]')
- .replace(/\b([Pp]an|[Pp]ani|[Pp]acjent|[Pp]acjentka|[Nn]azwisko|[Ii]mię)\s*:?\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+(\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)?/g,(m,a)=>a+' [dane usunięte]')}
+const PL_UP='A-ZĄĆĘŁŃÓŚŹŻ',PL_LO='a-ząćęłńóśźż';
+const MONTHS='stycze[nń]|stycznia|luty|lutego|marzec|marca|kwiecie[nń]|kwietnia|maj|maja|czerwiec|czerwca|lipiec|lipca|sierpie[nń]|sierpnia|wrzesie[nń]|wrze[sś]nia|pa[zź]dziernik|pa[zź]dziernika|listopad|listopada|grudzie[nń]|grudnia|sty|lut|mar|kwi|cze|lip|sie|wrz|pa[zź]|lis|gru';
+const FIRST=('adam adrian agata agnieszka aleksander aleksandra alicja amelia andrzej aneta angelika anna antoni antonina arkadiusz artur barbara bartłomiej bartosz beata bogdan bogumiła bogusław bożena bronisław cecylia czesław damian daniel danuta dariusz dawid dominik dominika dorota edward edyta elżbieta emil emilia eugeniusz ewa ewelina filip franciszek gabriela genowefa grażyna grzegorz halina hanna helena henryk hubert igor irena iwona izabela jacek jadwiga jakub jan janina janusz jarosław jerzy joanna jolanta józef józefa julia julian julita justyna kacper kamil kamila karol karolina katarzyna kazimierz kazimiera kinga klaudia konrad krystian krystyna krzysztof lech leon leszek lidia lucyna ludwik łucja łukasz maciej magdalena maja malwina małgorzata marcin marek maria marian marianna mariola mariusz marta marzena mateusz michalina michał mieczysław milena mirosław mirosława monika natalia nikola norbert oliwia oliwier patryk patrycja paulina paweł piotr przemysław radosław rafał renata robert roman romuald ryszard sabina sebastian stanisław stanisława stefan stefania sylwia szymon tadeusz tamara teresa tomasz urszula wacław waldemar wanda weronika wiesław wiesława wiktor wiktoria wincenty witold władysław władysława włodzimierz wojciech zbigniew zdzisław zdzisława zenon zofia zuzanna zygmunt żaneta').split(' ');
+const FIRSTSET=new Set(FIRST);
+const SURN_SUF=/(ski|ska|cki|cka|dzki|dzka|wicz|czyk|czak|iak|niak|ak|ek|uk|yk|ik|ło|ko|ny|na|wa)$/;
+const KIN='pan|pani|pacjent|pacjentka|chory|chora|nazwisko|imię|imie|imiona|nazywa się|córka|córki|córką|syn|syna|synem|żona|żony|żoną|mąż|męża|mężem|matka|matki|ojciec|ojca|brat|brata|siostra|siostry|wnuk|wnuczka|synowa|zięć|opiekun|opiekunka|sąsiad|sąsiadka|partner|partnerka|znajomy|znajoma|konkubent|konkubina|rodzina|dr|lek\\.|ratownik|świadek';
+function ci(w){return w.replace(/[a-ząćęłńóśźż]/g,c=>'['+c+c.toUpperCase()+']')}
+const KIN_RE=KIN.split('|').map(ci).join('|');
+const REL='córka|córki|córką|syn|syna|synem|żona|żony|żoną|mąż|męża|mężem|matka|matki|ojciec|ojca|brat|brata|siostra|siostry|wnuk|wnuczka|synowa|zięć|opiekun|opiekunka|sąsiad|sąsiadka|partner|partnerka|znajomy|znajoma|konkubent|konkubina|nazwisko|imię|imie|nazywa się';
+const UPW='['+PL_UP+']['+PL_LO+']+(?:-['+PL_UP+']['+PL_LO+']+)?',ANYW='['+PL_UP+PL_LO+']+(?:-['+PL_UP+PL_LO+']+)?';
+function anonymize(t,opt){opt=opt||{};let x=String(t||'');const TK=[];const T=l=>'\uE000'+(TK.push(l)-1)+'\uE001';const TOK='\uE000\\d+\uE001';
+ // e-mail
+ x=x.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g,()=>T('[e-mail usunięty]'));
+ // PESEL – z etykietą (dowolne grupowanie) i bez (11 cyfr, także 6+5 / 2+2+2+5 ze spacją, myślnikiem lub kropką)
+ x=x.replace(/PESEL\s*[:.\-]?\s*(nr\.?\s*)?\d[\d\s.\-]{9,18}\d/gi,()=>'PESEL '+T('[PESEL usunięty]'));
+ x=x.replace(/(?<!\d)\d{2}[\s.\-]?\d{2}[\s.\-]?\d{2}[\s.\-]?\d{5}(?!\d)/g,()=>T('[PESEL usunięty]'));
+ // dokumenty (dowód, paszport, nr karty, NIP, nr ubezpieczenia)
+ x=x.replace(/\b(dow[oó]d(u)?(\s+osobist\w+)?|paszport\w*|nr\s+karty|NIP|REGON|nr\s+ubezpieczenia|legitymacj\w+)\s*[:.\-]?\s*(nr\.?\s*)?[A-Z]{0,3}[\s\-]?\d[\d\s\-]{3,16}\d/gi,()=>T('[dokument usunięty]'));
+ // daty: ISO, cyfrowe, z miesiącem słownie lub rzymskim, rok urodzenia
+ x=x.replace(/(?<!\d)\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}(?!\d)/g,()=>T('[data usunięta]'));
+ x=x.replace(/(?<!\d)\d{1,2}\s?[./\-]\s?\d{1,2}\s?[./\-]\s?(\d{4}|\d{2})(?!\d)(\s*r\.?)?/g,()=>T('[data usunięta]'));
+ x=x.replace(new RegExp('(?<![\\d'+PL_LO+'])(\\d{1,2}\\s*)?\\b('+MONTHS+')\\.?(?=[\\s,.;:)]|$)(\\s*\\d{4}(\\s*r(oku)?\\.?)?)?','gi'),(m,d,mo,y)=>(d||y)?T('[data usunięta]'):m);
+ x=x.replace(/(?<!\d)\d{1,2}\s+(I{1,3}|IV|VI{0,3}|IX|XI{0,2}|X)\s+\d{4}(\s*r\.?)?/g,()=>T('[data usunięta]'));
+ x=x.replace(new RegExp('\\b(ur\\.?|urodzon[ya]|urodzenia|rocznik|r\\.\\s*ur\\.?)\\s*(w\\s+roku\\s+|w\\s+)?('+TOK+'|\\d{4}(\\s*r\\.?)?)','gi'),()=>T('[data urodzenia usunięta]'));
+ // telefony: +48 / 0048, 9 cyfr w grupach 3-3-3 lub 2-3-2-2, etykieta „tel.”
+ x=x.replace(/\b(tel\.?|telefon\w*|kom\.?|komórk\w*|nr\s+tel\.?)\s*[:.]?\s*(\+|00)?[\d\s()\-]{9,17}\d/gi,(m,k)=>k+' '+T('[telefon usunięty]'));
+ x=x.replace(/(\+|00)\s?48[\s\-]?(\(?\d{2,3}\)?[\s\-]?)?\d{2,3}[\s\-]?\d{2,3}[\s\-]?\d{2,3}/g,()=>T('[telefon usunięty]'));
+ x=x.replace(/(?<![\d,.])\(?\d{2}\)?[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2}(?![\d,])/g,()=>T('[telefon usunięty]'));
+ x=x.replace(/(?<![\d,.])\d{3}[\s\-]?\d{3}[\s\-]?\d{3}(?![\d,])/g,()=>T('[telefon usunięty]'));
+ // kod pocztowy + miejscowość
+ x=x.replace(new RegExp('(?<!\\d)\\d{2}-\\d{3}(?!\\d)(\\s+'+UPW+'(?:\\s+'+UPW+')?)?','g'),()=>T('[adres usunięty]'));
+ // adresy: zam./ul./al./os./pl. (także łańcuchy „zam. ul.”) aż do przecinka, średnika, nowej linii lub końca zdania
+ const AD='(zam\\.|zamieszka[łl]\\w*|mieszka\\s+(?:na|w|przy)|adres(?:\\s+zamieszkania)?\\s*:?|ul\\.|ulic[aye]|al\\.|alej[aię]|alei|os\\.|osiedl[eua]|pl\\.|plac[ua]?|przy\\s+ul\\.)';
+ x=x.replace(new RegExp('\\b'+AD+'(\\s*'+AD+')*\\s*[^\\n,;\\uE000]*?(?=[,;\\n\\uE000]|\\.\\s+['+PL_UP+']|\\.\\s*$|$)','gi'),()=>T('[adres usunięty]'));
+ x=x.replace(/\b(w\s+miejscowo[sś]ci|z\s+miejscowo[sś]ci|miejscowo[sś][cć]\s*:?)\s+[A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż]+(\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)?/gi,(m,a)=>a+' '+T('[miejscowość usunięta]'));
+ // imiona i nazwiska po słowach kluczowych (pan, pani, pacjent, córka, syn, żona, nazwisko…) – wyraz(y) wielką literą
+ x=x.replace(new RegExp('(?<!['+PL_UP+PL_LO+'])('+KIN_RE+')(\\s*[:\\-]?\\s+)('+UPW+'(?:\\s+'+UPW+'){0,2})','g'),(m,k,sp)=>k+sp+T('[dane usunięte]'));
+ // krewni / „nazwisko:” – nazwisko małą literą z typową końcówką
+ x=x.replace(new RegExp('(?<!['+PL_UP+PL_LO+'])('+REL.split('|').map(ci).join('|')+')(\\s*[:\\-]?\\s+)(['+PL_LO+']+(?:ski|ska|cki|cka|dzki|dzka|wicz|czyk|czak|iak|ak|ek|uk))(?!['+PL_LO+'])','g'),(m,k,sp)=>k+sp+T('[dane usunięte]'));
+ x=x.replace(new RegExp('(?<!['+PL_UP+PL_LO+'])('+['nazwisko','imię','imie','imiona','nazywa się','personalia'].map(ci).join('|')+')\\s*:?\\s+'+ANYW+'(\\s+'+ANYW+')?','g'),(m,a)=>a+' '+T('[dane usunięte]'));
+ // imię ze słownika (dowolna wielkość liter) + ewentualne nazwisko (wielką literą lub z końcówką nazwiska)
+ x=x.replace(new RegExp('(?<!['+PL_UP+PL_LO+'\\w])(['+PL_UP+PL_LO+']+)(?:(\\s+)('+ANYW+'))?(?!['+PL_UP+PL_LO+'\\w])','g'),(m,a,sp,b)=>{if(!FIRSTSET.has(a.toLowerCase()))return m;
+  if(b&&(/^[A-ZĄĆĘŁŃÓŚŹŻ]/.test(b)||SURN_SUF.test(b.toLowerCase()))&&!/^(lat|lata|roku|kg|mg|ml|jest|był|była|nie|lub|oraz|albo)$/i.test(b))return T('[dane usunięte]');return T('[dane usunięte]')+(b?sp+b:'')});
+ if(opt.free){
+  // tekst wolny: co najmniej dwa kolejne wyrazy wielką literą (nie na początku zdania) = imię i nazwisko / nazwa własna
+  x=x.replace(new RegExp('([a-ząćęłńóśźż0-9,;:)\\]\\uE001]\\s+)('+UPW+'(?:\\s+'+UPW+')+)','g'),(m,a)=>a+T('[dane usunięte]'));
+  // nazwisko z typową końcówką (-ski/-cki/-dzki/-wicz/-czyk) wielką literą w środku zdania
+  x=x.replace(new RegExp('([a-ząćęłńóśźż0-9,;:)\\]\\uE001]\\s+)(['+PL_UP+']['+PL_LO+']*(?:ski|ska|cki|cka|dzki|dzka|wicz|czyk))(?!['+PL_LO+'])','g'),(m,a)=>a+T('[dane usunięte]'));
+ }
+ x=x.replace(/\uE000(\d+)\uE001/g,(m,i)=>TK[+i]);
+ return x.replace(/(\[dane usunięte\])(\s*\[dane usunięte\])+/g,'$1')}
 const API={pttMatch,mgW,expectedBtn,sayify,numWords,anonymize,AI_PROMPT,buttonsFor,rhyButtons,RHY,adrText,RHY_NAME,labOf,btnKey,PressState,BTN,lev,fuzzyMatch,FUZZY,roscRhyOf,echoOf,BARGE_MIN,minText,insText,HK_GLU,amioDrip,amioDripSay,numW,amioCalc,amioSay,amioCount,hepCalc,hepBolusText,hepPrepText,HEPB,parsePair,bargeIn,sedText,fentRepText,midaRepText,fentWarn,volW,HEPR,PACEMAX,atroNext,BINT,BINF,binfMlh,binfConc,binfPrep,atroText,ENERGY_SEQ,energyFor,ENERGY,ENERGY_LABEL,vfInstr,VERSION,SAY,HT,htQ,r1,fmt1,mlWord,flowPhrase,noraMlh,dobuMlh,adrInfMlh,mapOf,noraTable,norm,parseNumber,matchCommand,interpret,Engine,report,hhmm,staticPhrases,NORA,DOBU};
 if(typeof module!=='undefined')module.exports=API;else root.RKO=API;
 })(this);
