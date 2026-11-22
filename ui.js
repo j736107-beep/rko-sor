@@ -2,7 +2,7 @@
 (function(){
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const LS={get:(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const cfg=Object.assign({email:'',energy:'mindray',syr:'',paceEl:'ap',atroAmp:'0.5',iso:'1/50',dopa:'200/50',adrinf:'1/50',sayConc:'1',pacer:'mindray',fentConc:'50',midaConc:'1',midaAmp:'5/1',atroDose:'0.5',stacked:'0',metro:'1',metroRate:'110',metroVol:'0.15',metroLucas:'1',barge:'min',amioMode:'drip',dropSet:'20',hep:'25000/50',hepAmp:'5000',amioInf:'900/50'},LS.get('rko_cfg',{}));if(!cfg.m161){cfg.metroLucas='1';cfg.m161=1;try{LS.set('rko_cfg',cfg)}catch(e){}}if(!cfg.m17){if(cfg.metroVol==='0.3')cfg.metroVol='0.15';cfg.m17=1;try{LS.set('rko_cfg',cfg)}catch(e){}}
+const cfg=Object.assign({listen:'cont',email:'',energy:'mindray',syr:'',paceEl:'ap',atroAmp:'0.5',iso:'1/50',dopa:'200/50',adrinf:'1/50',sayConc:'1',pacer:'mindray',fentConc:'50',midaConc:'1',midaAmp:'5/1',atroDose:'0.5',stacked:'0',metro:'1',metroRate:'110',metroVol:'0.15',metroLucas:'1',barge:'min',amioMode:'drip',dropSet:'20',hep:'25000/50',hepAmp:'5000',amioInf:'900/50'},LS.get('rko_cfg',{}));if(!cfg.m161){cfg.metroLucas='1';cfg.m161=1;try{LS.set('rko_cfg',cfg)}catch(e){}}if(!cfg.m17){if(cfg.metroVol==='0.3')cfg.metroVol='0.15';cfg.m17=1;try{LS.set('rko_cfg',cfg)}catch(e){}}
 let E=null,timer=null,wl=null,said=[];
 // ---- v1.9 licencja (offline, Ed25519) ----
 let instId=LS.get('rko_inst',null);if(!instId){instId=LIC.makeId('RKO');LS.set('rko_inst',instId)}
@@ -22,7 +22,7 @@ $('#ver').textContent=RKO.VERSION;
 for(const k in RKO.ENERGY_LABEL){const o=document.createElement('option');o.value=k;o.textContent=RKO.ENERGY_LABEL[k];$('#energy').appendChild(o)}
 $('#email').value=cfg.email;$('#energy').value=cfg.energy;$('#syr').value=cfg.syr;
 $('#paceEl').value=cfg.paceEl;for(const k in RKO.PACEMAX){const o=document.createElement('option');o.value=k;o.textContent=RKO.PACEMAX[k].label;$('#pacer').appendChild(o)}
-const KS=['atroAmp','iso','dopa','adrinf','sayConc','pacer','fentConc','midaConc','midaAmp','atroDose','stacked','hep','hepAmp','amioMode','dropSet','barge','metro','metroRate','metroVol','metroLucas'];KS.forEach(k=>$('#'+k).value=cfg[k]);['email','energy','syr','paceEl'].concat(KS).forEach(k=>$('#'+k).onchange=()=>{cfg[k]=$('#'+k).value.trim();LS.set('rko_cfg',cfg)});
+const KS=['atroAmp','iso','dopa','adrinf','sayConc','pacer','fentConc','midaConc','midaAmp','atroDose','stacked','hep','hepAmp','amioMode','dropSet','barge','metro','metroRate','metroVol','metroLucas','listen'];KS.forEach(k=>$('#'+k).value=cfg[k]);['email','energy','syr','paceEl'].concat(KS).forEach(k=>$('#'+k).onchange=()=>{cfg[k]=$('#'+k).value.trim();LS.set('rko_cfg',cfg)});
 // v1.9.7 (B6): Android WebView nie aktualizuje navigator.onLine w trybie samolotowym – sprawdzamy połączenie naprawdę (zapytanie bez treści, limit 4 s)
 let netOk=null,netP=null;const NET_URL='https://www.gstatic.com/generate_204';
 function netShow(ok){const was=netOk;netOk=ok;$('#net').textContent=ok?'☁ sieć dostępna':'✈ offline';$('#net').classList.toggle('off',!ok);if(ok&&was===false){const q=LS.get('rko_queue',[]);updQ();if(q.length&&cfg.email&&!active())toast('Sieć wróciła – raporty w kolejce: '+q.length+'. Raporty → „Wyślij kolejkę teraz”.')}}
@@ -41,21 +41,22 @@ function engine(){return new RKO.Engine({full:isFull(),energy:cfg.energy,paceEl:
 const NAT=()=>plug('RkoNative');
 function nat(m,o){const N=NAT();if(N&&N[m])return N[m](o||{}).catch(()=>{})}
 function begin(sim,resumeState){if(sim&&!needFull('Symulacja'))return;if(typeof mic!=='undefined'&&mic.on){mic.on=false;clearTimeout(mic.t);Ears.stop()}Voice.unlock();E=engine();
- Ears.windowMode=true;if(resumeState){E.resume(resumeState)}else E.start({sim,email:cfg.email,syr:cfg.syr?+cfg.syr:null});
+ Ears.windowMode=cfg.listen==='window';if(resumeState){E.resume(resumeState)}else E.start({sim,email:cfg.email,syr:cfg.syr?+cfg.syr:null});
  Ears.classify=alts=>RKO.interpret(alts,E&&E.s&&E.s.mode!=='idle'?E.ctx():{});
  $('#simbar').classList.toggle('hide',!E.s.sim);$('#chg').classList.toggle('hide',!E.s.sim);
- Metro.start();show('run');wake(true);Metro.useNative=true;nat('action',{on:true});if(cfg.pin==='1')nat('pin',{on:true});$('#wywB').classList.toggle('hide',!isFull());Ears.onResult=(alts,conf,src)=>{if(!Ears.inWindow()){Ears.mark('poza oknem odpowiedzi – pominięto');return}handle(alts,false,conf)};Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
+ Metro.start();show('run');wake(true);Metro.useNative=true;nat('action',{on:true});if(cfg.pin==='1')nat('pin',{on:true});$('#wywB').classList.toggle('hide',!isFull());Ears.onResult=(alts,conf,src)=>{if(!Ears.inWindow()){Ears.mark('poza oknem odpowiedzi – pominięto');micFlashSet('bad','poza oknem odpowiedzi – naciśnij mikrofon',1500);return}handle(alts,false,conf)};Ears.barge=cfg.barge;startEarsAfterFirst();clearInterval(timer);timer=setInterval(loop,250);render()}
 $('#go').onclick=()=>{if(E&&E.s&&E.s.mode!=='idle'&&E.s.mode!=='ended'){show('run');return}begin(false)};$('#sim').onclick=()=>begin(true);
 // mikrofon dopiero po pierwszym komunikacie (start rozpoznawania zabiera fokus audio na Androidzie)
 // v1.6.2: mikrofon startuje natychmiast po końcu pierwszego nagrania (pętla natywna i tak czeka, aż lektor zamilknie)
 // v1.7: rozpoznawanie startuje od razu i słucha także podczas lektora (trwały rozpoznawacz natywny)
 function startEarsAfterFirst(){setTimeout(()=>Ears.start(),300)}
-let pendingIn=[];Voice.hooks.push(sp=>{if(!sp&&pendingIn.length){const q=pendingIn;pendingIn=[];q.forEach(a=>handle(a,true))}});
+let pendingIn=[];Voice.hooks.push(sp=>{if(!sp&&pendingIn.length){const q=pendingIn;pendingIn=[];q.forEach(a=>handle(a,true,null,'głos'))}});
 function handle(alts,direct,conf,src){if(mic.on){mic.res(alts);return}if(!E)return;alts=[].concat(alts);
  // v1.8: głos nigdy nie przerywa lektora (wynik w trakcie mowy → kolejka)
- if(!direct&&Voice.speaking){pendingIn.push(alts);Ears.mark('w kolejce (lektor mówi)');return}
+ if(!direct&&Voice.speaking){const rq=RKO.interpret(alts,E.ctx());if(!rq.cmd){Ears.mark('nie pasuje (lektor mówi)');micFlashSet('bad','nie rozpoznano: „'+alts[0]+'”',1500);return}pendingIn.push(alts);Ears.mark('w kolejce (lektor mówi)');micFlashSet('ok','przyjęto: '+cmdLbl(rq.cmd)+' – po komunikacie',1500);return}
 $('#heard').textContent='mikrofon: '+[].concat(alts)[0];const before=E.s.cur&&E.s.cur.id,beforeTxt=E.s.cur&&E.s.cur.text,k0=RKO.btnKey(E.s);const r=RKO.interpret(alts,E.ctx());const c=E.input(alts,src||(direct?'przycisk':'głos'));
  if(c==='unmatched')$('#heard').textContent='nie rozpoznano: „'+alts[0]+'” – powiedz jeszcze raz albo użyj przycisku';
+ if(!direct||src==='głos'||src==='ptt'){if(c==='unmatched'||!c)micFlashSet('bad','nie rozpoznano: „'+alts[0]+'”',1500);else micFlashSet('ok','rozpoznano: '+cmdLbl(c,r.cmd),1300)}
  else if(beforeTxt&&RKO.btnKey(E.s)!==k0&&!(E.s.cur&&E.s.cur.text===beforeTxt))Voice.skipStale(beforeTxt);Ears.mark(c&&c!=='unmatched'?('komenda: '+c+(r.fuzzy?' (przybliżone)':'')+(before?' [pytanie: '+before+']':'')):('nie pasuje'+(before?' [pytanie: '+before+']':'')));
  if(c==='send'){if(E.s.mode==='ended'){if(cfg.email)sendReport(E.s);else{showReport(E.s);askEmail(E.s)}}else E.say('Raport wyślę po zakończeniu.')}
  if(E.s.mode==='ended')finished();render()}
@@ -79,7 +80,21 @@ function renderUndo(){const u=$('#undo');const ok=!!(E&&E.canUndo&&E.canUndo());
  if(undoSnapT!==E.undoSnap.t){undoSnapT=E.undoSnap.t;undoShownT=Date.now()}const armed=Date.now()-undoShownT>=UNDO_ARM;u.classList.add('on');u.classList.toggle('arm',!armed);u.setAttribute('aria-hidden','false');
  const l=Math.max(0,5-Math.floor((Date.now()-E.undoSnap.t)/1000));$('#undoB').textContent='COFNIJ ('+l+')';$('#undoT').textContent=E.undoSnap.label.slice(0,60)}
 // v1.9.6: przycisk mikrofonu – metronom i lektor stop, świeży rozpoznawacz, wynik pośredni, transkrypcja na żywo
-const PTT={get on(){return Ears.pttOn}};function pttSet(on){const b=$('#ptt');if(!b)return;b.classList.toggle('on',on);$('#pttL').textContent=on?'SŁUCHAM…':'MÓW'}
+const PTT={get on(){return Ears.pttOn}};function pttSet(on){micRender()}
+// v1.9.9: wskaźnik mikrofonu – zielony miga = słucham; niebieski = rozpoznano polecenie; żółty = nie rozpoznano; szary = czeka (lektor/pytanie); czerwony = wyłączony/błąd/brak uprawnień
+const CMD_LBL={shockable:'VF / pVT',nonshock:'asystolia / PEA',pulse:'jest tętno',nopulse:'brak tętna',rosc:'ROSC',shock_done:'wyładowano',adr:'adrenalina podana',amio:'amiodaron podany',lido:'lidokaina podana',yes:'TAK',no:'NIE',ack:'OK',given:'podano',next:'dalej',number:'liczba',intub:'intubacja',usg:'USG',organised:'rytm zorganizowany',arrest:'zatrzymanie krążenia',pause:'pauza',end:'zakończ',zakoncz_tak:'tak, zakończ',replay:'powtórz',send:'wyślij',up:'zwiększ',down:'zmniejsz',keep:'utrzymaj',rko_od:'RKO od…',lucas_off:'LUCAS stop',lucas_on:'LUCAS start',alone:'nie mogę uciskać',hyperk:'hiperkaliemia',bicarb:'wodorowęglan',unknown:'nie wiem',present:'jest',checked:'sprawdzone',brady:'bradykardia',pace:'stymulacja',kg:'masa ciała',decide:'decyzja',iso:'izoprenalina',dopa:'dopamina',nora:'noradrenalina',dobu:'dobutamina',hepinf:'wlew heparyny',amioinf:'wlew amiodaronu',adrinf:'wlew adrenaliny',change:'zmień rytm',s20:'20',s50:'50'};
+function cmdLbl(c,c2){return CMD_LBL[c]||CMD_LBL[c2]||String(c||c2||'')}
+let micFlash=null;function micFlashSet(kind,text,ms){micFlash={kind,text,until:Date.now()+(ms||1300)};micRender()}
+function micBase(){const st=String(Ears.status||'off');if(Ears.pttOn)return ['listen','SŁUCHAM','słucham – powiedz komendę'];
+ if(/uprawnien|niedostępn|brak rozpoznawania|nieobsługiwan|błąd (9|12|13|not-allowed|audio-capture|service-not-allowed|language-not-supported|NOT_AVAILABLE)\b/.test(st))return ['err','MIKROFON ✕',st.replace(/^mikrofon: /,'')];
+ if(!Ears.running)return ['off','WYŁ.','mikrofon wyłączony – naciśnij, by mówić'];
+ if(Voice.speaking)return ['wait','CZEKAJ','lektor mówi – komenda po komunikacie'];
+ if(Ears.paused||!Ears.inWindow())return ['wait','NACIŚNIJ','mikrofon czeka na pytanie – naciśnij, by mówić'];
+ if(/^mikrofon: błąd/.test(st)&&Date.now()-(Ears._errT||0)<3000)return ['warn','…','ponawiam nasłuch'];
+ return ['listen','SŁUCHAM','słucham – mów komendę']}
+function micRender(){const b=$('#ptt');if(!b)return;let [k,l,t]=micBase();if(micFlash&&Date.now()<micFlash.until&&k!=='err'){k=micFlash.kind;l=k==='ok'?'✓ OK':'?';t=micFlash.text}else micFlash=null;
+ const cls='ptt m-'+k;if(b.className!==cls)b.className=cls;const L=$('#pttL');if(L&&L.textContent!==l)L.textContent=l;const m=$('#micst');if(m){if(m.textContent!==t)m.textContent=t;if(m.className!=='micst m-'+k)m.className='micst m-'+k}}
+window.__micRender=micRender;
 function pttUi(t,cls){const r=$('#recog');if(!r)return;r.textContent=t;r.className='recog'+(cls?' '+cls:'')}
 function pttPress(onCmd){if(Ears.pttOn){Ears.pttEnd(null,'anulowano');return}Voice.unlock&&Voice.unlock();pttSet(true);pttUi('przygotowuję mikrofon…');
  Ears.ptt({ms:8000,match:a=>RKO.pttMatch(a),ui:t=>pttUi(t,'live'),done:(alts,why)=>{pttSet(false);if(!alts){pttUi(why,'err');return}const m=RKO.pttMatch(alts);
@@ -102,7 +117,7 @@ addEventListener('beforeunload',e=>{if(active()){e.preventDefault();e.returnValu
 // klawiatura liczb
 let pv='';const pg=$('.padg');['1','2','3','4','5','6','7','8','9','⌫','0','OK'].forEach(k=>{const b=document.createElement('button');b.textContent=k;b.onclick=()=>{if(k==='OK'){$('#pad').classList.add('hide');if(pv)handle([pv],true);pv=''}else if(k==='⌫')pv=pv.slice(0,-1);else pv+=k;$('#padv').textContent=pv||'\u00a0'};pg.appendChild(b)});
 $('#numB').onclick=()=>{pv='';$('#padv').textContent='\u00a0';$('#pad').classList.remove('hide')};
-Ears.onState=st=>{const el=$('#ears');el.textContent='🎤 '+st;el.classList.toggle('on',/^słucham/.test(st));if(mic.on)mic.show()};Ears.onHeard=t=>{$('#heard').textContent='mikrofon: '+t};
+Ears.onState=st=>{micRender();const el=$('#ears');el.textContent='🎤 '+st;el.classList.toggle('on',/^słucham/.test(st));if(mic.on)mic.show()};Ears.onHeard=t=>{$('#heard').textContent='mikrofon: '+t};
 function hm(t){const d=new Date(t),p=n=>String(n).padStart(2,'0');return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())}
 function renderLog(){const L=Ears.log.filter(e=>!e.quiet&&e.src!=='pośredni').slice(-5);$('#rawlog').textContent=L.map(e=>hm(e.t)+' '+e.src+': '+e.text+(e.verdict?' → '+e.verdict:'')).join('\n')}
 let logT=null;Ears.onLog=()=>{if(logT)return;logT=setTimeout(()=>{logT=null;renderLog();if(mic.on)mic.show();try{localStorage.setItem('rko_srlog',Ears.logText().slice(-60000))}catch(e){}},120)};
@@ -122,7 +137,7 @@ const mic={on:false,lines:[],async run(){if(E&&E.s&&E.s.mode!=='idle'&&E.s.mode!
   'Stan: '+Ears.status+' · błędy: '+JSON.stringify(Ears.errors)].filter(Boolean).concat(mic.lines.slice(-10));if(!end&&!mic.on)return;$('#stres').textContent=L.join('\n')}};
 $('#mictest').onclick=()=>mic.run();
 function mmss(ms){ms=Math.max(0,ms);const s=Math.floor(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
-function loop(){if(!E)return;E.tick();if(E.s.mode!=='ended'&&Date.now()-(loop._p||0)>5000){loop._p=Date.now();LS.set('rko_cur',E.s)}{const w=E.metroWanted({on:cfg.metro!=='0',lucas:cfg.metroLucas!=='0'});Metro.want=w>0;Metro.rate=+cfg.metroRate||110;Metro.vol=(+String(cfg.metroVol).replace(',','.')||0.3)*(w||1)}render()}
+function loop(){micRender();if(Ears.watch)Ears.watch();if(!E)return;E.tick();if(E.s.mode!=='ended'&&Date.now()-(loop._p||0)>5000){loop._p=Date.now();LS.set('rko_cur',E.s)}{const w=E.metroWanted({on:cfg.metro!=='0',lucas:cfg.metroLucas!=='0'});Metro.want=w>0;Metro.rate=+cfg.metroRate||110;Metro.vol=(+String(cfg.metroVol).replace(',','.')||0.3)*(w||1)}render()}
 function render(){if(!E)return;const s=E.s,now=Date.now();if(s.mode==='idle')return;
  $('#modeL').textContent=s.mode==='rosc'?'PO ROSC':s.mode==='ended'?'ZAKOŃCZONO':(s.paused?'NZK – PAUZA':'NZK');
  $('#tTot').textContent=mmss((s.tEnd||now)-s.arrestT);
