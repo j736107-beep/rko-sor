@@ -133,3 +133,9 @@ button.act{animation:none!important}
  .undo{height:48px;min-height:48px;margin:0 0 4px}
  .fb,.fb2{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
+/* v1.9.7: wszystko na jednym ekranie bez przewijania (skróty rytmu w jednym rzędzie, niższe elementy stałe) */
+.rhyb{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;min-height:44px}.rhyb button{font-size:clamp(10px,3.05vw,13px);padding:12px 0;letter-spacing:-.2px;white-space:nowrap;overflow:hidden}
+.ctxb{height:calc(3 * 62px + 2 * 8px);grid-auto-rows:62px}.ctxb.n1{grid-auto-rows:90px}
+.ptt{width:80px;height:80px}.recog{max-height:80px}
+.undo{height:50px;min-height:50px}
+@media (orientation:portrait) and (max-height:800px){#run .big{font-size:min(18vw,76px)}.next{height:calc(3 * 1.3em + 20px);font-size:15px}.said{height:4.3em}}
