@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). */
 (function(root){
 'use strict';
-const VERSION='2.0.0';
+const VERSION='2.1.0';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -94,7 +94,7 @@ const CMDS=[
  ['nopulse',/brak tetna|nie ma tetna|bez tetna|brak tetno|bez tetno/],
  ['pulse',/jest tetno|wyczuwalne tetno|tetno jest|mam tetno|mamy tetno|wyczuwam tetno|tetno wyczuwam|jest tetna|tetno obecne|^tetno$|^tetno (wyczuwalne|obecne)/],['brady',/bradykardi/],
  ['nonshock',/brak wskazan|nie do defibrylacji|asystol|asystori|\bpea\b|\bp e a\b|\bpe a\b|\bpe e a\b|\bpi i ej\b|rozkojarzeni|aktywnosc elektryczna/],
- ['organised',/rytm zatokowy|zatokowy|rytm zorganizowany|zorganizowany|wezlowy/],['intub',/intubacj|zaintubowan/],['usg',/\busg\b|u s g|pocus|ultrasonograf/],
+ ['organised',/rytm zatokowy|zatokowy|rytm zorganizowany|zorganizowany|wezlowy/],['intub',/\bzaintubowan\w*|\bintubowan[aoy]\b|^intubacja\b|\bintubacja (wykonana|zrobiona|zalozona|jest|gotowa)|\b(rurka|rurke) (zalozona|zalozon\w*|jest|w tchawicy|na miejscu)|\bzalozon\w* rurk\w*/],['usg',/\busg\b|u s g|pocus|ultrasonograf/],
  ['rosc',/\brosc\b|ros[ck]|powrot krazenia/],['arrest',/zatrzymanie/],['up',/zwieksz/],['keep',/utrzymaj/],['pause',/pauza|^stop\b|\bstop$/],['down',/zmniejsz/],['end',/zakoncz/],
  ['given',/podano|podane|podany|podana|podalem|podalam/],['bicarb',/wodoroweglan/],['change',/zmien rytm/],
  // v2.0.0: krótkie odpowiedzi – synonimy i typowe przekłamania rozpoznawania (cała wypowiedź)
@@ -190,9 +190,10 @@ const SAY={
  torsade:'Czy to częstoskurcz torsade de pointes?',
  mag:'Podaj siarczan magnezu 2 gramy, czyli 10 mililitrów dwudziestoprocentowego. Powiedz: tak.',
  intubQ:'Czy czujesz się pewnie w intubacji?',
- intubYes:'Intubacja. Przerwa w ucisku poniżej 5 sekund. Potwierdź stałym zapisem kapnografii. Powiedz: intubacja, gdy rurka jest na miejscu.',
+ intubYes:'Intubuj. Przerwa w ucisku poniżej 5 sekund. Potwierdź stałym zapisem kapnografii. Po założeniu rurki zgłoś to głosem.',
  intubNo:'Nadgłośniowy przyrząd, preferowany i-gel. Czekamy na anestezjologa.',
  intubDone:'Zapisano intubację. Ciągły ucisk, 10 oddechów na minutę, kapnografia.',
+ intubAck:'Zaintubowany, przyjęłam. Ciągły ucisk, 10 oddechów na minutę, kapnografia.',intubAgain:'Już zapisane.',lektorTest:'Ten głos będzie czytał komunikaty.',noQ:'Brak otwartego pytania.',
  etco2:'Podaj dwutlenek węgla w wydechu.',etco2Q:'Czy jest pomiar dwutlenku węgla w wydechu?',pocusQ:'Czy wykonano USG serca? Czy jest czynność serca?',decExc:'Czy są wyjątki: hipotermia, zatrucie, tromboliza w trakcie, kandydat do ECMO?',decEnd:'Zakończyć reanimację?',decSay:'Aby zakończyć, powiedz: tak, zakończ.',contCPR:'Kontynuuj RKO.',decLysis:'Tromboliza: kontynuuj RKO 60 do 90 minut od podania.',
  usg:'Zapisano USG. Tylko w przerwie na ocenę rytmu, przerwa poniżej 10 sekund.',
  calcium:'Podaj chlorek wapnia 10 procent, 10 mililitrów, czyli 1 gram. Powiedz: tak.',
@@ -343,7 +344,7 @@ P.lucasOn=function(){const s=this.s,now=this.now();s.lucas='on';this.lucasEnd();
 P.newCycle=function(txt){const s=this.s,now=this.now();s.offWarned=false;this.lucasEnd();if(s.offStart){const off=(now-s.offStart)/MS;s.handsOff+=off;s.maxOff=Math.max(s.maxOff,off);s.offStart=null}
  s.cycleT=now;s.warned=false;s.cycles++;if(txt)this.say(txt);
  // drogi oddechowe po 1. cyklu; 4H/4T od 2. cyklu – cała lista krótkich pytań po kolei (v2.0.0)
- if(s.cycles===1&&!s.intub)this.ask('intubQ',SAY.intubQ,{def:'no',tries:2});
+ if(s.cycles===1&&!s.intub&&!s.airwayDone)this.ask('intubQ',SAY.intubQ,{def:'no',tries:2});
  if(s.cycles>=2&&!s.htGo&&s.htIdx<HTQ.length&&!this.has('ht')){s.htGo=true;this.say(HT_INTRO);this.htAsk()}
 };
 P.checkQs=function(){const s=this.s;if(s.etco2Avail==null){if(!this.has('etco2Q'))this.ask('etco2Q',SAY.etco2Q,{def:'no',tries:1,prio:0})}else if(s.etco2Avail&&!this.has('etco2'))this.ask('etco2',SAY.etco2,{def:'skip',tries:1,prio:0});if(!this.has('pocusQ'))this.ask('pocusQ',SAY.pocusQ,{def:'skip',tries:1,prio:0})};
@@ -625,7 +626,8 @@ P._input=function(alts){const s=this.s;const r=interpret(alts,this.ctx());s.hear
  case 'zakoncz_tak':if(s.mode==='arrest')this.log('decyzja','Kierujący: ZAKOŃCZENIE RKO o '+hhmm(this.now()));this.finish();return r.cmd;
  case 'send':return 'send';
  case 'usg':this.log('POCUS','USG przy łóżku');this.say(SAY.usg,'ack');this.ask('usgRes',SAY.usgRes,{def:'skip',tries:1});return r.cmd;
- case 'intub':if(!(s.cur&&s.cur.id==='intubQ')){s.intub=this.now();s.airway='intubacja (wideolaryngoskop)';this.drop('intubQ');this.log('drogi oddechowe','Intubacja – potwierdzić kapnografią');this.say(SAY.intubDone);this.ask('tube',SAY.tube,{def:'skip',tries:1});return r.cmd}break;
+ // v2.1.0 (t93u): „zaintubowany/zaintubowano/intubacja/rurka założona” w DOWOLNYM momencie – zapis z godziną, krótkie potwierdzenie, bez dalszych pytań o drogi oddechowe
+ case 'intub':if(s.intub){const n=this.now();if(n-s.intub>8000&&n-(s.intubAgainT||0)>30000){s.intubAgainT=n;this.say(SAY.intubAgain,'ack')}return r.cmd}s.intub=this.now();s.airwayDone=true;s.airway='intubacja (wideolaryngoskop)';this.drop('intubQ');this.drop('tube');this.log('drogi oddechowe','Zaintubowany o '+hhmm(s.intub)+' – potwierdzić kapnografią');this.say(SAY.intubAck,'ack');return r.cmd;
  case 'rosc':if(s.mode!=='rosc'){this.toRosc();return r.cmd}break;
  case 'arrest':if(s.mode==='rosc'){this.toArrest();return r.cmd}break;
  case 'shock_done':if(!(s.cur&&s.cur.id==='shock')&&s.mode==='arrest'){this.shockDone();return r.cmd}break;
