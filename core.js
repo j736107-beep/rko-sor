@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). */
 (function(root){
 'use strict';
-const VERSION='2.1.0';
+const VERSION='2.1.1';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
@@ -78,24 +78,25 @@ const HUND={sto:100,dwiescie:200,trzysta:300};
 function parseNumber(text){const t=norm(text);{const pm=t.split(/ (?:przecinek|kropka) /);if(pm.length===2&&!/\d/.test(t)){const a=parseNumber(pm[0]),b=parseNumber(pm[1]);if(a!=null&&b!=null&&b<10)return a+b/10}}const m=t.match(/\d+(?:[ ,.]\d+)?/);if(m)return parseFloat(m[0].replace(/[ ,]/,'.'));
  let tot=0,any=false,half=false;for(const w of t.split(' ')){if(w in HUND){tot+=HUND[w];any=true}else if(w in TENS){tot+=TENS[w];any=true}else if(w in UN){tot+=UN[w];any=true}else if(w==='pol')half=true}
  return any?tot+(half?.5:0):null}
-const ABORT_RE=/(^|[^a-z])(kurwa|kurwa|k\*+a|k\*+|k\*rwa|ku\*+a|kur\*+a|k\*\*\*a|kurw\*)\s*ma[cć]\b|^kurwamac\b/;
+// v2.1.1 (t95u): komenda kończąca = „zakończ” (zakończ, zakończyć, zakończmy, kończymy, koniec akcji); „nie zakończ…” nie kończy
+const ABORT_RE=/(^|\s)(zakoncz\w*|konczymy|koniec akcji)(\s|$)/;const ABORT_NEG=/(^|\s)nie (zakoncz|konczymy|koniec)/;
 // kolejność ma znaczenie: dłuższe frazy pierwsze
 const CMDS=[
- // v2.0.0 (t88u–t90u, decyzja lekarza): „kurwa mać” – natychmiastowe zakończenie akcji BEZ pytania (komenda z „Seksmisji”); warianty z cenzurą Google (gwiazdki)
+ // v2.1.1 (t95u, decyzja lekarza): „zakończ” – natychmiastowe zakończenie akcji BEZ pytania
  ['abort',ABORT_RE],
  ['ack',/^((ok|okej|okay|o k|okey|oki|dobrze|zrobione|zrobiony|zrobiona|zrobilem|zrobilam|wykonane|gotowe|gotowa|gotowy)\s*)+$/],
  ['rko_od',/(rko|reanimacj\w*|resuscytacj\w*) (od|trwa)( od)? \S+/],
  ['decide',/czas na decyzj|podsumowani/],
  ['hyperk',/hiperkaliemi|insulin\w* z glukoz/],
  ['lucas_off',/(przerw\w*|pauz\w*|zatrzymaj\w*|wstrzymaj\w*|stop)\W*(w )?lucas|lucas\W*(pauz\w*|stop|przerw\w*|wstrzyman\w*)/],['lucas_on',/lucas\W*(wlaczon\w*|wznowion\w*|pracuje|start)|(wznow\w*|wlacz\w*|uruchom\w*) lucas/],
- ['iso',/izoprenalin|isoprenalin|izuprel/],['dopa',/dopamin/],['nora',/noradrenalin/],['dobu',/dobutamin/],['hepinf',/wlew\w* heparyn|heparyn\w* (we )?wlew/],['amioinf',/wlew\w* amiodaron|amiodaron\w* (we )?wlew/],['adrinf',/wlew\w* adrenalin|\badrenalin\w* (we )?wlew/],['pace',/zalamki p bez qrs|zalamek p bez qrs|blok serca|blok przedsionkowo|blok av|potrzebny stymulator|stymulacj\w* przezskorn/],['alone',/nie moge uciskac|jestem sam|nikt nie uciska/],['zakoncz_tak',/\btak\b.*\bzakoncz/],['replay',/powtorz ostatnie|odtworz instrukcj|^powtorz\b|\bpowtorz$/],
+ ['iso',/izoprenalin|isoprenalin|izuprel/],['dopa',/dopamin/],['nora',/noradrenalin/],['dobu',/dobutamin/],['hepinf',/wlew\w* heparyn|heparyn\w* (we )?wlew/],['amioinf',/wlew\w* amiodaron|amiodaron\w* (we )?wlew/],['adrinf',/wlew\w* adrenalin|\badrenalin\w* (we )?wlew/],['pace',/zalamki p bez qrs|zalamek p bez qrs|blok serca|blok przedsionkowo|blok av|potrzebny stymulator|stymulacj\w* przezskorn/],['alone',/nie moge uciskac|jestem sam|nikt nie uciska/],['zakoncz_tak',/\btak\b.*\b(zakoncz|przerwij)/],['replay',/powtorz ostatnie|odtworz instrukcj|^powtorz\b|\bpowtorz$/],
  ['send',/wyslij/],['adr',/\badrenalin\w* (podan|podal|poszl|weszl|wstrzyk)|\b(podan\w*|podal\w*|dalem|dalam|dal|wstrzyk\w*) adrenalin/],['amio',/amiodaron\w* (podan|podal|poszl|weszl)|\b(podal\w*|dalem|dalam|dal) amiodaron/],['lido',/lidokain\w* (podan|podal|poszl)|\b(podal\w*|dalem|dalam|dal) lidokain/],
  ['nonshock',/nie do defibrylacji|brak wskazan|bez wskazan|nie defibrylowa|nie defibryluj/],['shock_done',/defibrylacj\w* wykonan|wyladowan\w*|wyladowano|\bstrzal\w*|strzelil\w*|strzelon\w*/], ['organised0',/migotanie przedsionkow/],['shockable',/migotanie|\bvf\b|\bwf\b|\bwu ef\b|\bfau ef\b|\bv f\b|\bp ?vt\b|\bvt\b|\bwu te\b|\bfau te\b|czestoskurcz|defibrylacyjn|defibrylacj|do defibrylacji/],
  ['nopulse',/brak tetna|nie ma tetna|bez tetna|brak tetno|bez tetno/],
  ['pulse',/jest tetno|wyczuwalne tetno|tetno jest|mam tetno|mamy tetno|wyczuwam tetno|tetno wyczuwam|jest tetna|tetno obecne|^tetno$|^tetno (wyczuwalne|obecne)/],['brady',/bradykardi/],
  ['nonshock',/brak wskazan|nie do defibrylacji|asystol|asystori|\bpea\b|\bp e a\b|\bpe a\b|\bpe e a\b|\bpi i ej\b|rozkojarzeni|aktywnosc elektryczna/],
  ['organised',/rytm zatokowy|zatokowy|rytm zorganizowany|zorganizowany|wezlowy/],['intub',/\bzaintubowan\w*|\bintubowan[aoy]\b|^intubacja\b|\bintubacja (wykonana|zrobiona|zalozona|jest|gotowa)|\b(rurka|rurke) (zalozona|zalozon\w*|jest|w tchawicy|na miejscu)|\bzalozon\w* rurk\w*/],['usg',/\busg\b|u s g|pocus|ultrasonograf/],
- ['rosc',/\brosc\b|ros[ck]|powrot krazenia/],['arrest',/zatrzymanie/],['up',/zwieksz/],['keep',/utrzymaj/],['pause',/pauza|^stop\b|\bstop$/],['down',/zmniejsz/],['end',/zakoncz/],
+ ['rosc',/\brosc\b|ros[ck]|powrot krazenia/],['arrest',/zatrzymanie/],['up',/zwieksz/],['keep',/utrzymaj/],['pause',/pauza|^stop\b|\bstop$/],['down',/zmniejsz/],['end',/przerwij akcj/],
  ['given',/podano|podane|podany|podana|podalem|podalam/],['bicarb',/wodoroweglan/],['change',/zmien rytm/],
  // v2.0.0: krótkie odpowiedzi – synonimy i typowe przekłamania rozpoznawania (cała wypowiedź)
  ['yes',/^(ta|tag|dak|tac|tack|taak|tak|jest|obecn\w*|tak jest|jest obecn\w*)( tak)?$/],['no',/^(nie|niet|nia|nje|brak|nieobecn\w*|negatywn\w*|wykluczon\w*)( nie)?$/],
@@ -132,7 +133,7 @@ function bargeIn(heard,speaking,mode,conf){const h=norm(heard);if(!h)return 'ign
  if(mode==='off')return 'queue';if(conf!=null&&conf>=0&&conf<(mode==='min'?0.7:0.6))return 'queue';
  if(mode==='min')return BARGE_MIN.includes(h)?'interrupt':'queue';
  const c=matchCommand(heard);return CRIT.includes(c)&&h.split(' ').length<=5?'interrupt':'queue'}
-function matchCommand(text){const t=norm(text);if(!t)return null;for(const [id,re] of CMDS)if(re.test(t))return id==='organised0'?'organised':id;return null}
+function matchCommand(text){const t=norm(text);if(!t)return null;for(const [id,re] of CMDS){if(id==='abort'&&ABORT_NEG.test(t))continue;if(re.test(t))return id==='organised0'?'organised':id}return null}
 function interpret(alts,ctx){alts=[].concat(alts||[]).filter(a=>a!=null);for(const a of alts){const c=matchCommand(a);if(c)return {cmd:c,num:parseNumber(a),text:a}}
  for(const a of alts){const f=fuzzyMatch(a,ctx);if(f)return {cmd:f.cmd,num:parseNumber(a),text:a,fuzzy:true,weak:f.weak}}
  for(const a of alts){const n=parseNumber(a);if(n!=null)return {cmd:'number',num:n,text:a}}return {cmd:null,num:null,text:alts[0]||''}}
@@ -141,7 +142,7 @@ const SAY={
  start:'Zatrzymanie krążenia. Zaczynamy uciskanie klatki piersiowej.',
  call:'Wezwij anestezjologa i zespół reanimacyjny.',
  defib:'Podłącz defibrylator i przynieś LUCAS.',
- htSum:'Podsumowanie przyczyn odwracalnych.',abortBye:'OK, kończę. Ale proszę cię, nie używaj więcej brzydkich słów.',htNone:'Przyczyny odwracalne: żadna nie potwierdzona.',
+ htSum:'Podsumowanie przyczyn odwracalnych.',abortBye:'Kończę akcję. Raport zapisany.',htNone:'Przyczyny odwracalne: żadna nie potwierdzona.',
  iv:'Dostęp dożylny. Po dwóch nieudanych próbach dostęp doszpikowy.',
  roscRhy:'Czy rytm zatokowy?',
  sim:'To jest symulacja.',
@@ -194,7 +195,7 @@ const SAY={
  intubNo:'Nadgłośniowy przyrząd, preferowany i-gel. Czekamy na anestezjologa.',
  intubDone:'Zapisano intubację. Ciągły ucisk, 10 oddechów na minutę, kapnografia.',
  intubAck:'Zaintubowany, przyjęłam. Ciągły ucisk, 10 oddechów na minutę, kapnografia.',intubAgain:'Już zapisane.',lektorTest:'Ten głos będzie czytał komunikaty.',noQ:'Brak otwartego pytania.',
- etco2:'Podaj dwutlenek węgla w wydechu.',etco2Q:'Czy jest pomiar dwutlenku węgla w wydechu?',pocusQ:'Czy wykonano USG serca? Czy jest czynność serca?',decExc:'Czy są wyjątki: hipotermia, zatrucie, tromboliza w trakcie, kandydat do ECMO?',decEnd:'Zakończyć reanimację?',decSay:'Aby zakończyć, powiedz: tak, zakończ.',contCPR:'Kontynuuj RKO.',decLysis:'Tromboliza: kontynuuj RKO 60 do 90 minut od podania.',
+ etco2:'Podaj dwutlenek węgla w wydechu.',etco2Q:'Czy jest pomiar dwutlenku węgla w wydechu?',pocusQ:'Czy wykonano USG serca? Czy jest czynność serca?',decExc:'Czy są wyjątki: hipotermia, zatrucie, tromboliza w trakcie, kandydat do ECMO?',decEnd:'Przerwać reanimację?',decSay:'Aby przerwać, powiedz komendę kończącą albo naciśnij czerwony przycisk.',contCPR:'Kontynuuj RKO.',decLysis:'Tromboliza: kontynuuj RKO 60 do 90 minut od podania.',
  usg:'Zapisano USG. Tylko w przerwie na ocenę rytmu, przerwa poniżej 10 sekund.',
  calcium:'Podaj chlorek wapnia 10 procent, 10 mililitrów, czyli 1 gram. Powiedz: tak.',
  gluPre:'Glikemia przed podaniem?',gluNow:'Zmierz glikemię teraz.',hkEcg:'Czy są zmiany w EKG?',hkArrest:'Podaj insulinę dożylnie. Podłącz 250 mililitrów 10% glukozy, wlew pełnym strumieniem, możesz użyć mankietu ciśnieniowego.',hkOut:'Podaj insulinę dożylnie. Wlew 250 mililitrów 10% glukozy przez 15 minut.',hkProphDrip:'Potem 10% glukoza, 17 kropli na minutę przez 5 godzin.',hkProphPump:'Potem 10% glukoza. Ustaw pompę 50 mililitrów na godzinę przez 5 godzin.',hkGlu:'Sprawdź glikemię.',hkK:'Kontrola potasu. Podaj wynik.',hkKHigh:'Potas nadal wysoki. Można powtórzyć insulinę z glukozą.',hypo:'Glikemia poniżej 70. Hipoglikemia.',insGo:'Powiedz: tak.',
@@ -204,7 +205,7 @@ const SAY={
  bicarbNo:'Nie podawaj wodorowęglanu.',bicarbHk:'Hiperkaliemia w zatrzymaniu krążenia: podaj wodorowęglan sodu 50 milimoli, czyli 50 mililitrów 8,4-procentowego, innym dostępem albo po przepłukaniu linii po wapniu. Powiedz: tak.',
  lysis:'Tromboliza. Alteplaza 50 miligramów bolus, czyli 50 mililitrów. Kontynuuj resuscytację 60 do 90 minut. Powiedz: tak.',
  decision:'Dwadzieścia minut resuscytacji. Rozważ: CO2 w wydychanym powietrzu, przyczynę odwracalną, hipotermię i możliwość ECPR. Decyzja należy do lekarza. Prowadzę dalej.',
- endQ:'Zakończyć resuscytację? Powiedz: tak, zakończ.',
+ endQ:'Przerwać resuscytację? Potwierdź komendą kończącą albo czerwonym przyciskiem.',
  adrinfArrest:'W trakcie zatrzymania krążenia adrenalina tylko w bolusie, 1 miligram.',
  weightAssume:'Przyjmuję 70 kilogramów, popraw jeśli inaczej.',
  tube:'Podaj rozmiar rurki.',usgRes:'Wynik USG? Powiedz krótko, na przykład: tamponada, odma, brak ruchów serca albo bez zmian.',
@@ -216,8 +217,8 @@ const SAY={
  dobuMax:'Maksymalna dawka dobutaminy. Nie zwiększaj. Konsultacja kardiologiczna.',
  hepQ:'Heparyna: zatorowość płucna czy ostry zespół wieńcowy?',hepNoInf:'Wlew heparyny dopiero po powrocie krążenia.',aptt:'Kontrola APTT za 6 godzin.',hepRosc:'Zatorowość płucna: rozpocząć wlew heparyny? Tak albo nie.',
  stacked:'Monitorowane zatrzymanie: rozważ do 3 wyładowań seryjnych, potem uciskanie.',
- endCancel:'Nie zakończono. Prowadzę dalej.',
- ended:'Zakończono. Raport jest gotowy.',
+ endCancel:'Nie przerwano. Prowadzę dalej.',
+ ended:'Akcja zamknięta. Raport jest gotowy.',
  rosc:'Powrót krążenia. Saturacja 94 do 98 procent, EKG 12-odprowadzeniowe, temperatura. Zaczynam pętlę ciśnienia.',
  rearrest:'Ponowne zatrzymanie krążenia. Ucisk teraz.',
  sys:'Podaj aktualne ciśnienie skurczowe.',dia:'Podaj aktualne ciśnienie rozkurczowe.',
@@ -607,7 +608,7 @@ P._input=function(alts){const s=this.s;const r=interpret(alts,this.ctx());s.hear
  if(s.mode==='idle'||s.mode==='ended'){if(r.cmd==='replay')this.replay();if(r.cmd==='send')return 'send';return r.cmd}
  // komendy globalne
  switch(r.cmd){
- case 'abort':if(s.mode==='arrest'||s.mode==='rosc'){this.log('decyzja','Kierujący: NATYCHMIASTOWE ZAKOŃCZENIE (komenda głosowa, bez potwierdzenia) o '+hhmm(this.now()));this.say(SAY.abortBye);this.finish()}return r.cmd;
+ case 'abort':if(s.mode==='arrest'||s.mode==='rosc'){this.log('decyzja','Kierujący: NATYCHMIASTOWE ZAKOŃCZENIE (komenda głosowa, bez potwierdzenia) o '+hhmm(this.now()));this.finish(SAY.abortBye)}return r.cmd;
  case 'replay':this.replay();return r.cmd;
  case 'pace':if(s.mode==='arrest'){s.cprPace=true;this.log('stymulacja','RKO ze stymulacją (asystolia z załamkami P / blok całkowity) – DO WERYFIKACJI');this.say(SAY.cprPace+', '+this.paceMax+' miliamperów. '+SAY.cprPace2);return r.cmd}this.startPacing();return r.cmd;
  case 'adrinf':if(!this.full){this.say(SAY.fullOnly);return r.cmd}if(s.mode==='arrest'){this.say(SAY.adrinfArrest);return r.cmd}if(!(s.cur&&s.cur.id==='bradyDrug')){this.ask('adrinfQ',SAY.adrinfQ,{prio:2,def:'no',tries:1});return r.cmd}break;
@@ -683,9 +684,9 @@ P.noraUp=function(){const s=this.s;const d=r1(s.nora.dose*100+5)/100;s.nora.dose
 P.startDobu=function(){const s=this.s;if(!s.kg){s.dobuPending=true;this.ask('weight',SAY.weight,{prio:1});return}s.dobuPending=false;
  const mlh=dobuMlh(2.5,s.kg);s.dobu={dose:2.5,mlh,t:this.now()};this.log('lek','Dobutamina 250 mg/50 ml: '+fmt1(mlh)+' ml/h = 2,5 µg/kg/min',{drug:'dobutamina',dose:'2,5 µg/kg/min',mlh});
  this.say(SAY.dobuPrep+' '+SAY.setPump+' '+flowPhrase(mlh)+'.');this.ask('dobuGo','Powiedz: tak, gdy pompa ruszy.',{def:'skip',tries:2,prio:1})};
-P.finish=function(){const s=this.s;if(s.mode==='ended')return;if(s.offStart){s.handsOff+=(this.now()-s.offStart)/MS;s.offStart=null}
+P.finish=function(bye){const s=this.s;if(s.mode==='ended')return;if(s.offStart){s.handsOff+=(this.now()-s.offStart)/MS;s.offStart=null}
  s.endPrevMode=s.mode;s.mode='ended';s.tEnd=this.now();s.q=[];s.cur=null;this.log('koniec','Zakończenie: '+(s.endPrevMode==='rosc'?'ROSC':'bez ROSC'));
- if(s.sim)s.summary=this.simSummary();this.say(SAY.ended+(s.sim?' '+s.summary.speech:''))};
+ if(s.sim)s.summary=this.simSummary();this.say((typeof bye==='string'?bye:SAY.ended)+(s.sim?' '+s.summary.speech:''))};
 // ---------- symulacja ----------
 const SIMR=['VF','pVT','asystolia','PEA'],SIMC=['hiperkaliemia','zatorowość płucna','tamponada','hipowolemia','hipoksja','toksyny'];
 P.simInit=function(){const s=this.s,R=this.rand;s.simPt={age:25+Math.floor(R()*60),kg:50+Math.floor(R()*8)*10,scen:R()<.5?'SOR':'przywieziony'};
@@ -745,7 +746,7 @@ const BTN={rhythm:[B('TAK','tak','b'),B('NIE','nie','n')],
  hepQ:[B('ZATOROWOŚĆ','zatorowość'),B('OZW','OZW')],acDrug:[B('DOAC','doac'),B('WARFARYNA','warfaryna'),B('HEPARYNA','heparyna'),B('NIE WIEM','nie wiem')],
  bradyDrug:[B('IZOPRENALINA','izoprenalina'),B('DOPAMINA','dopamina'),B('ADRENALINA WLEW','wlew adrenaliny')],which:[B('NORADRENALINA','noradrenalina'),B('DOBUTAMINA','dobutamina'),B('WLEW W BRADYKARDII','wlew')],
  decExc:[B('NIE – BRAK WYJĄTKÓW','nie'),B('HIPOTERMIA','hipotermia'),B('ZATRUCIE','zatrucie'),B('TROMBOLIZA','tromboliza'),B('ECPR','ecpr')],
- decEnd:[B('TAK, ZAKOŃCZ','tak, zakończ','r'),B('NIE – KONTYNUUJ','nie')],endQ:[B('TAK, ZAKOŃCZ','tak, zakończ','r'),B('NIE','nie','n')],
+ decEnd:[B('TAK, ZAKOŃCZ','tak, przerwij','r'),B('NIE – KONTYNUUJ','nie')],endQ:[B('TAK, ZAKOŃCZ','tak, przerwij','r'),B('NIE','nie','n')],
  pocusQ:[B('CZYNNOŚĆ OBECNA','jest czynność'),B('BRAK CZYNNOŚCI','brak czynności'),B('NIE WYKONANO','nie wykonano')],
  amioCvc:[B('CENTRALNIE','centralnie'),B('OBWODOWO','obwodowo')],amioCnt:[B('0','zero'),B('1 raz','jeden raz'),B('2 razy','dwa')],
  acQ:[B('TAK','tak','b'),B('NIE','nie','n'),B('NIE WIEM','nie wiem')],inrQ:[B('LICZBA','#num'),B('NIE WIEM','nie wiem')],hepLast:[B('LICZBA (h)','#num'),B('NIE WIEM','nie wiem')],gluPre:[B('LICZBA','#num'),B('NIE WIEM','nie wiem')],
