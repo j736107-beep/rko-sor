@@ -160,3 +160,18 @@ button.act{animation:none!important}
 .lekRow{gap:8px;flex-wrap:wrap}.lekRow button{flex:1;min-width:30%;font-size:17px;padding:14px 6px}
 .lekB.act{background:#1f5f3a!important;border-color:#5fc98d!important;color:#fff}
 #settings.limited>*:not(.keep){display:none!important}
+/* v2.1.2: wąski ekran telefonu (360–412 px, także z powiększoną czcionką systemową) – nic nie może być ucięte */
+#run .top{gap:6px;justify-content:flex-start}
+#run .top>#modeL,#run .top>.wywb{flex:0 0 auto;white-space:nowrap}
+#run .top>.wywb{padding:5px 8px;letter-spacing:.5px}
+#run .top>.ears{flex:1 1 0;min-width:0;max-width:none;text-align:right}
+#pttL{font-size:12px;letter-spacing:0;white-space:normal;text-align:center;line-height:1.1;max-width:100%;overflow-wrap:anywhere}
+.ptt{overflow:hidden;min-width:0;letter-spacing:0}
+.micst{flex:0 0 auto;height:auto;min-height:26px;line-height:1.2;padding:4px 8px;white-space:normal;text-overflow:clip;font-size:14px}
+.pttcol{max-height:none;overflow:visible}
+.pttcol .recog{flex:1 1 auto;overflow:visible;max-height:none}
+@media (max-width:600px){#run .top>.ears{display:none}}
+@media (max-width:430px){.pttcol .recog{font-size:12px;line-height:1.2}.micst{font-size:13px}}
+#permBox ol{margin:6px 0 6px 20px;padding:0}#permBox li{margin:4px 0}
+@media (max-width:430px){.next{height:calc(4 * 1.25em + 14px);font-size:14px;line-height:1.25;padding:6px 10px}}
+@media (max-width:430px){.next{height:auto;min-height:calc(4 * 1.25em + 14px);overflow:visible}}

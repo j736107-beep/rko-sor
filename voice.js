@@ -65,13 +65,14 @@ const V={voice:'m',genderize:t=>genderize(t,V.voice),dir(){return 'audio/'+(V.vo
  _armTail(endMs){clearTimeout(V._armTm);if(!V._tail)return;V._armTm=setTimeout(()=>{if(V.queue.length||!V.speaking||V._cut)return;const q=V.kind==='ask'||V.kind==='remind';if(q)S.prearm('pytanie')},Math.max(0,endMs-V.PREARM_MS))},
  async _seq(list,retry){V.stats.clips+=list.length;if(V.startReady){const p=V.startReady;V.startReady=null;await Promise.race([p,new Promise(r=>setTimeout(r,1500))])}
   if(V.ctx){try{if(V.ctx.state!=='running')await TO(V.ctx.resume(),800);if(V.ctx.state!=='running')throw new Error('ctx '+V.ctx.state);const bs=await Promise.race([Promise.all(list.map(f=>f?V.buf(f):null)),new Promise((_,ko)=>setTimeout(()=>ko(new Error('decode timeout')),4000))]);if(V._cut)return;
-    V._intr=false;V.ctx.onstatechange=()=>{if(V.ctx.state!=='running')V._intr=true};
+    V._intr=false;V._intrAt=0;V.ctx.onstatechange=()=>{if(V.ctx.state!=='running'&&!V._intr){V._intr=true;V._intrAt=Date.now()}};
     V.killSrcs();await new Promise(res=>{let t=V.ctx.currentTime+0.06;V.srcs=[];let last=null;
      for(const b of bs){if(!b){t+=GAP;continue}const s=V.ctx.createBufferSource();s.buffer=b;s.connect(V.out());s.start(t);t+=b.duration;V.srcs.push(s);last=s}
-     {const ms=(t-V.ctx.currentTime)*1000;if(V._sp)V._sp.est=Date.now()+ms;V._armTail(ms)}
+     {const ms=(t-V.ctx.currentTime)*1000;if(V._sp)V._sp.est=Date.now()+ms;V._seqT0=Date.now();V._seqMs=ms;V._armTail(ms)}
      V._seqDone=res;const fin=kill=>{if(V._seqDone===res){V._seqDone=null;if(kill)V.killSrcs();else V.srcs=[];res()}};if(last)last.onended=()=>fin(false);setTimeout(()=>fin(true),(t-V.ctx.currentTime)*1000+800)});
     // przerwane przez system (fokus audio) – wznów kontekst i odtwórz zdanie jeszcze raz (raz), nigdy nie ucinaj
-    if(V._intr&&!V._cut&&!retry&&V.ctx.state!=='closed'){V.killSrcs();V.stats.replays=(V.stats.replays||0)+1;await TO(V.ctx.resume(),800);return V._seq(list,true)}return}
+    // v2.1.2: bez „powtarzania dwa razy” – powtórka tylko gdy przerwanie nastąpiło w pierwszej połowie komunikatu (inaczej słuchacz usłyszał już prawie całość)
+    if(V._intr&&!V._cut&&!retry&&V.ctx.state!=='closed'&&(V._intrAt-(V._seqT0||0))<0.5*(V._seqMs||0)){V.killSrcs();V.stats.replays=(V.stats.replays||0)+1;await TO(V.ctx.resume(),800);return V._seq(list,true)}return}
    catch(e){V.stats.fallback++}}
   for(const f of list){if(V._cut)return;if(f)await V._clip(f);else await new Promise(r=>setTimeout(r,GAP*1000))}},
  _clip(f){return new Promise(res=>{const a=V.audio;let done=false;const fin=()=>{if(!done){done=true;res()}};a.onended=fin;a.onerror=fin;try{a.volume=Math.min(1,V.vol||1)}catch(e){}a.src=V.dir()+f;a.play().catch(fin);setTimeout(fin,15000)})},
@@ -139,8 +140,18 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
  addLog(src,text,extra){const e=Object.assign({t:Date.now(),src,text:text==null?'':String(text)},extra||{});S.log.push(e);if(S.log.length>500)S.log.splice(0,S.log.length-500);try{S.onLog(e)}catch(x){}return e},
  mark(verdict){for(let i=S.log.length-1;i>=0;i--){const e=S.log[i];if(e.src==='final'||e.src==='pośredni→wykonano'||e.src==='przycisk'){if(!e.verdict){e.verdict=verdict;try{S.onLog(e)}catch(x){}}return}}},
  logText(){const p=n=>String(n).padStart(2,'0');return S.log.map(e=>{const d=new Date(e.t);return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+String(d.getMilliseconds()).padStart(3,'0')+' '+e.src+': '+e.text+(e.alts&&e.alts.length>1?' | alternatywy: '+e.alts.slice(1).join(' / '):'')+(e.conf!=null?' | pewność '+(+e.conf).toFixed(2):'')+(e.verdict?' → '+e.verdict:'')}).join('\n')},
+ // v2.1.2: uprawnienie do mikrofonu – jedno miejsce. Stan: granted | denied (trwała odmowa – okno systemowe już się nie pokaże) | prompt / prompt-with-rationale (okno zamknięte bez decyzji) | unknown (błąd wtyczki – próbujemy mimo to)
+ permState:null,permDenied:null,
+ permOk(st){return st==='granted'||st==='unknown'},
+ async perm(ask){const SR=plug('SpeechRecognition');if(!isNative||!SR){S.permState='unknown';return 'unknown'}let st='unknown';
+  try{const p=await TO(SR.checkPermissions(),3000);st=(p&&p.speechRecognition)||'unknown'}catch(e){S.addLog('info','uprawnienia (sprawdzenie): '+(e&&e.message||e));st='unknown'}
+  if(st!=='granted'&&st!=='unknown'&&ask){for(let k=0;k<2;k++){try{S.addLog('info','prośba o uprawnienie do mikrofonu (okno systemowe)');const q=await SR.requestPermissions();st=(q&&q.speechRecognition)||'unknown'}catch(e){S.addLog('info','uprawnienia (prośba): '+(e&&e.message||e));st='unknown'}
+   if(st==='granted'||st==='denied'||st==='unknown')break;await new Promise(r=>setTimeout(r,700))}}
+  S.permState=st;if(S.permOk(st))S.permDenied=null;try{S.onPerm(st)}catch(e){}return st},
+ permFail(st){S.permDenied=st||'denied';S.set('mikrofon: brak uprawnienia – dotknij mikrofonu');S.addLog('błąd','brak uprawnienia do mikrofonu (Android: '+st+')');try{S.onPermFail(st)}catch(e){}},
+ onPerm(){},onPermFail(){},
  async start(){if(S.running)return;S.running=true;S.paused=false;S._lastEv=Date.now();const N=plug('RkoNative');if(N&&N.muteBeep)N.muteBeep({on:true}).catch(()=>{});const SR=plug('SpeechRecognition');
-  if(isNative){if(SR){try{const p=await SR.checkPermissions();if(p.speechRecognition!=='granted'){const q=await SR.requestPermissions();if(q.speechRecognition!=='granted'){S.set('mikrofon: brak uprawnienia – użyj przycisków');S.addLog('błąd','brak uprawnienia do mikrofonu');S.running=false;return}}}catch(e){S.addLog('info','uprawnienia: '+(e&&e.message))}}
+  if(isNative){if(SR){const st=await S.perm(true);if(!S.permOk(st)){S.permFail(st);S.running=false;return}}
    while(S.running&&V.speaking){S.set('czekam, lektor mówi');await new Promise(r=>setTimeout(r,100))}if(!S.running)return;
    if(N&&N.srStart){if(!S._lis){S._lis=true;try{N.addListener('sr',ev=>S._ev(ev))}catch(e){}}try{await Promise.race([S.opts(),new Promise(r=>setTimeout(r,1800))])}catch(e){S.addLog('info','opcje rozpoznawacza: '+(e&&e.message||e))}try{await N.srStart({language:'pl-PL'});S.mode='native';S.addLog('info','start rozpoznawania (natywne, pl-PL, '+(S.offline&&S.nativeV>=210?'offline na telefonie':'online')+')');S.set('słucham');if(S.windowMode)S.openWindow()}catch(e){S.set('mikrofon: rozpoznawanie niedostępne ('+(e&&e.message||e)+') – użyj przycisków');S.addLog('błąd','srStart: '+(e&&e.message||e));S.running=false}return}
    if(SR){S.mode='plugin';S._plugin(SR);return}}
@@ -216,6 +227,8 @@ const S={running:false,onResult:()=>{},onHeard:()=>{},onState:()=>{},onLog:()=>{
   if(ok){o.ui('słucham… powiedz komendę');S.addLog('PTT','słucham')}
   clearTimeout(S._pttT);S._pttT=setTimeout(()=>S.pttEnd(null,'nie rozpoznano – cisza przez '+Math.round(o.ms/1000)+' s'),o.ms)},
  async _pttStart(){const N=plug('RkoNative');
+  // v2.1.2: przycisk mikrofonu NAJPIERW prosi Androida o uprawnienie (w 1.9.6–2.1.1 od razu srRestart – bez uprawnienia nic się nie działo)
+  if(isNative&&plug('SpeechRecognition')){const st=await S.perm(true);if(!S.permOk(st)){S.permFail(st);S.pttEnd(null,'brak uprawnienia do mikrofonu');return false}}
   if(isNative&&N&&N.srRestart){if(!S._lis){S._lis=true;try{N.addListener('sr',ev=>S._ev(ev))}catch(e){}}
    for(let k=0;k<2;k++){try{await TO(N.srRestart({language:'pl-PL'}),3000);S.mode='native';S.running=true;return true}catch(e){const m=String(e&&e.message||e);S.addLog('błąd','PTT srRestart: '+m);
      if(k===0){S._pttO.ui('błąd: '+(ERR[m]||m)+' – ponawiam…');await new Promise(r=>setTimeout(r,500))}else{S.pttEnd(null,'błąd: '+(ERR[m]||m));return false}}}}
