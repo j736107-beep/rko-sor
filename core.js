@@ -1,7 +1,7 @@
 /* RKO SOR – logika (czysta, testowalna). */
 (function(root){
 'use strict';
-const VERSION='2.1.2';
+const VERSION='2.1.3';
 // ---------- liczby i formatowanie ----------
 function r1(x){return Math.round(x*10)/10}
 function fmt1(x){const v=r1(x);return (Number.isInteger(v)?String(v):v.toFixed(1)).replace('.',',')}
